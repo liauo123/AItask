@@ -337,7 +337,11 @@ function hideAllStages(){
 async function startImage(){
   stopImage(false);
   imageStream=await navigator.mediaDevices.getUserMedia({
-    video:{facingMode:{ideal:facingMode},width:{ideal:1280},height:{ideal:720}},
+    video:{
+      facingMode:{exact:facingMode},
+      width:{ideal:1280},
+      height:{ideal:720}
+    },
     audio:false
   });
   $("imageVideo").srcObject=imageStream;
@@ -567,3 +571,4 @@ if(taskId)loadTask();
 </script>
 </body>
 </html>
+
