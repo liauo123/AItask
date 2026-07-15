@@ -374,8 +374,8 @@ async function imageLoop(){
 }
 
 async function startPose(){
-  // Pose 保留 Teachable Machine 原生 Webcam 架構，
-  // 只在重新建立 Webcam 時切換鏡頭。
+  // 使用 Teachable Machine Pose 原生 Webcam，
+  // 避免部分手機 getUserMedia / facingMode 相容問題。
   if(poseWebcam){
     try{poseWebcam.stop();}catch(e){}
     poseWebcam=null;
@@ -387,14 +387,11 @@ async function startPose(){
   }
 
   const size=420;
-  const flip = facingMode==="user";
+  const flip=true;
 
   poseWebcam=new tmPose.Webcam(size,size,flip);
 
-  await poseWebcam.setup({
-    facingMode:facingMode
-  });
-
+  await poseWebcam.setup();
   await poseWebcam.play();
 
   const canvas=$("poseCanvas");
@@ -411,8 +408,8 @@ async function poseLoop(){
   if(posePredicting){poseRaf=requestAnimationFrame(poseLoop);return}
   posePredicting=true;
   try{
-    const video=$("imageVideo");
-    const {pose,posenetOutput}=await model.estimatePose(video);
+    poseWebcam.update();
+    const {pose,posenetOutput}=await model.estimatePose(poseWebcam.canvas);
     const predictions=await model.predict(posenetOutput);
     drawPose(pose);
     processPredictions(predictions,$("poseCanvas"));
@@ -422,13 +419,10 @@ async function poseLoop(){
   finally{posePredicting=false;if(!finished&&!paused&&poseWebcam)poseRaf=requestAnimationFrame(poseLoop)}
 }
 function drawPose(pose){
-  if(!poseCtx)return;
+  if(!poseCtx||!poseWebcam)return;
   const canvas=$("poseCanvas");
-  const video=$("imageVideo");
   poseCtx.clearRect(0,0,canvas.width,canvas.height);
-  if(video.readyState>=2){
-    poseCtx.drawImage(video,0,0,canvas.width,canvas.height);
-  }
+  poseCtx.drawImage(poseWebcam.canvas,0,0);
   if(pose){
     tmPose.drawKeypoints(pose.keypoints,0.5,poseCtx);
     tmPose.drawSkeleton(pose.keypoints,0.5,poseCtx);
@@ -560,7 +554,6 @@ function stopAll(){
   if(poseRaf)cancelAnimationFrame(poseRaf);
   poseRaf=null;
   if(poseWebcam){poseWebcam.stop();poseWebcam=null}
-  stopImage();
   stopAudio();
 }
 
@@ -580,14 +573,18 @@ async function togglePause(){
 }
 
 async function switchCamera(){
-  facingMode=facingMode==="environment"?"user":"environment";
-
+  // Image 使用 facingMode 控制前後鏡頭
   if(projectType==="image"){
+    facingMode=facingMode==="environment"?"user":"environment";
     await startImage();
+    return;
   }
 
+  // Pose 保持 tmPose.Webcam 相容架構
+  // 重新建立 Webcam 後繼續辨識
   if(projectType==="pose"){
     await startPose();
+    return;
   }
 }
 
