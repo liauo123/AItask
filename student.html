@@ -374,23 +374,29 @@ async function imageLoop(){
 }
 
 async function startPose(){
-  // Pose 專案改用與 Image 相同的相機控制方式，
-  // 讓前後鏡頭切換可以由 facingMode 控制。
-  stopImage(false);
+  // Pose 保留 Teachable Machine 原生 Webcam 架構，
+  // 只在重新建立 Webcam 時切換鏡頭。
+  if(poseWebcam){
+    try{poseWebcam.stop();}catch(e){}
+    poseWebcam=null;
+  }
 
-  imageStream=await navigator.mediaDevices.getUserMedia({
-    video:{
-      facingMode:{exact:facingMode},
-      width:{ideal:1280},
-      height:{ideal:720}
-    },
-    audio:false
-  });
-
-  $("imageVideo").srcObject=imageStream;
-  await $("imageVideo").play();
+  if(poseRaf){
+    cancelAnimationFrame(poseRaf);
+    poseRaf=null;
+  }
 
   const size=420;
+  const flip = facingMode==="user";
+
+  poseWebcam=new tmPose.Webcam(size,size,flip);
+
+  await poseWebcam.setup({
+    facingMode:facingMode
+  });
+
+  await poseWebcam.play();
+
   const canvas=$("poseCanvas");
   canvas.width=size;
   canvas.height=size;
@@ -399,6 +405,7 @@ async function startPose(){
   setStatus("recognitionStatus","姿勢相機已啟動，請讓全身進入框內。","success");
   poseLoop();
 }
+
 async function poseLoop(){
   if(finished||paused||!poseWebcam)return;
   if(posePredicting){poseRaf=requestAnimationFrame(poseLoop);return}
@@ -580,10 +587,6 @@ async function switchCamera(){
   }
 
   if(projectType==="pose"){
-    if(poseRaf){
-      cancelAnimationFrame(poseRaf);
-      poseRaf=null;
-    }
     await startPose();
   }
 }
