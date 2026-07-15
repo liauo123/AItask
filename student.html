@@ -317,7 +317,7 @@ async function startSelectedProject(){
     await startImage();
   }else if(projectType==="pose"){
     $("poseStage").classList.remove("hidden");
-    $("switchBtn").classList.add("hidden");
+    $("switchBtn").classList.remove("hidden");
     $("targetHint").textContent="目前要完成的動作";
     await startPose();
   }else{
@@ -554,9 +554,19 @@ async function togglePause(){
 }
 
 async function switchCamera(){
-  if(projectType!=="image")return;
   facingMode=facingMode==="environment"?"user":"environment";
-  await startImage();
+
+  if(projectType==="image"){
+    await startImage();
+  }
+
+  if(projectType==="pose"){
+    if(poseWebcam){
+      poseWebcam.stop();
+      poseWebcam=null;
+    }
+    await startPose();
+  }
 }
 
 $("loadBtn").onclick=loadTask;
@@ -571,4 +581,3 @@ if(taskId)loadTask();
 </script>
 </body>
 </html>
-
