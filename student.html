@@ -168,7 +168,7 @@ const db=firebase.firestore();
 let taskId="",task=null,projectType="",metadata=null,model=null;
 let resultRef=null,currentIndex=0,completed=[],attempts=0,holdCount=0,finished=false,paused=false;
 let imageStream=null,imageRaf=null,facingMode="environment",imagePredicting=false;
-let poseWebcam=null,poseCtx=null,poseRaf=null,posePredicting=false;
+let poseWebcam=null,poseCtx=null,poseRaf=null,posePredicting=false,poseVideoStream=null,poseVideo=null;
 let audioListening=false;
 let predictionRows={};
 
@@ -374,11 +374,11 @@ async function imageLoop(){
 }
 
 async function startPose(){
-  // 使用 Teachable Machine Pose 原生 Webcam，
-  // 避免部分手機 getUserMedia / facingMode 相容問題。
-  if(poseWebcam){
-    try{poseWebcam.stop();}catch(e){}
-    poseWebcam=null;
+  // Pose 改用 getUserMedia 控制前後鏡頭，
+  // 再將影像提供給 Teachable Machine Pose 模型。
+  if(poseVideoStream){
+    poseVideoStream.getTracks().forEach(t=>t.stop());
+    poseVideoStream=null;
   }
 
   if(poseRaf){
@@ -386,17 +386,28 @@ async function startPose(){
     poseRaf=null;
   }
 
-  const size=420;
-  const flip=true;
+  if(!poseVideo){
+    poseVideo=document.createElement("video");
+    poseVideo.autoplay=true;
+    poseVideo.muted=true;
+    poseVideo.playsInline=true;
+  }
 
-  poseWebcam=new tmPose.Webcam(size,size,flip);
+  poseVideoStream=await navigator.mediaDevices.getUserMedia({
+    video:{
+      facingMode:{ideal:facingMode},
+      width:{ideal:1280},
+      height:{ideal:720}
+    },
+    audio:false
+  });
 
-  await poseWebcam.setup();
-  await poseWebcam.play();
+  poseVideo.srcObject=poseVideoStream;
+  await poseVideo.play();
 
   const canvas=$("poseCanvas");
-  canvas.width=size;
-  canvas.height=size;
+  canvas.width=420;
+  canvas.height=420;
   poseCtx=canvas.getContext("2d");
 
   setStatus("recognitionStatus","姿勢相機已啟動，請讓全身進入框內。","success");
@@ -404,20 +415,49 @@ async function startPose(){
 }
 
 async function poseLoop(){
-  if(finished||paused||!poseWebcam)return;
-  if(posePredicting){poseRaf=requestAnimationFrame(poseLoop);return}
+  if(finished||paused||!poseVideo)return;
+
+  if(posePredicting){
+    poseRaf=requestAnimationFrame(poseLoop);
+    return;
+  }
+
   posePredicting=true;
+
   try{
-    poseWebcam.update();
-    const {pose,posenetOutput}=await model.estimatePose(poseWebcam.canvas);
+    const canvas=$("poseCanvas");
+    poseCtx.clearRect(0,0,canvas.width,canvas.height);
+
+    poseCtx.drawImage(
+      poseVideo,
+      0,0,
+      canvas.width,
+      canvas.height
+    );
+
+    const {pose,posenetOutput}=await model.estimatePose(canvas);
     const predictions=await model.predict(posenetOutput);
+
     drawPose(pose);
-    processPredictions(predictions,$("poseCanvas"));
+
+    processPredictions(predictions,canvas);
+
     const top=[...predictions].sort((a,b)=>b.probability-a.probability)[0];
-    $("poseOverlay").textContent=`目前姿勢：${top.className}｜${Math.round(top.probability*100)}%`;
-  }catch(e){setStatus("recognitionStatus","姿勢辨識錯誤：\n"+e.message,"error")}
-  finally{posePredicting=false;if(!finished&&!paused&&poseWebcam)poseRaf=requestAnimationFrame(poseLoop)}
+    $("poseOverlay").textContent=
+      `目前姿勢：${top.className}｜${Math.round(top.probability*100)}%`;
+
+  }catch(e){
+    setStatus("recognitionStatus","姿勢辨識錯誤：\n"+e.message,"error");
+  }
+
+  finally{
+    posePredicting=false;
+    if(!finished&&!paused&&poseVideo){
+      poseRaf=requestAnimationFrame(poseLoop);
+    }
+  }
 }
+
 function drawPose(pose){
   if(!poseCtx||!poseWebcam)return;
   const canvas=$("poseCanvas");
@@ -553,7 +593,8 @@ function stopAll(){
   stopImage();
   if(poseRaf)cancelAnimationFrame(poseRaf);
   poseRaf=null;
-  if(poseWebcam){poseWebcam.stop();poseWebcam=null}
+  if(poseWebcam){try{poseWebcam.stop();}catch(e){} poseWebcam=null}
+  if(poseVideoStream){poseVideoStream.getTracks().forEach(t=>t.stop());poseVideoStream=null;}
   stopAudio();
 }
 
@@ -573,15 +614,13 @@ async function togglePause(){
 }
 
 async function switchCamera(){
-  // Image 使用 facingMode 控制前後鏡頭
+  facingMode=facingMode==="environment"?"user":"environment";
+
   if(projectType==="image"){
-    facingMode=facingMode==="environment"?"user":"environment";
     await startImage();
     return;
   }
 
-  // Pose 保持 tmPose.Webcam 相容架構
-  // 重新建立 Webcam 後繼續辨識
   if(projectType==="pose"){
     await startPose();
     return;
