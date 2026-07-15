@@ -428,12 +428,26 @@ async function poseLoop(){
     const canvas=$("poseCanvas");
     poseCtx.clearRect(0,0,canvas.width,canvas.height);
 
-    poseCtx.drawImage(
-      poseVideo,
-      0,0,
-      canvas.width,
-      canvas.height
-    );
+    // 前鏡頭需要水平翻轉，避免 Pose 模型左右方向錯亂
+    if(facingMode==="user"){
+      poseCtx.save();
+      poseCtx.translate(canvas.width,0);
+      poseCtx.scale(-1,1);
+      poseCtx.drawImage(
+        poseVideo,
+        0,0,
+        canvas.width,
+        canvas.height
+      );
+      poseCtx.restore();
+    }else{
+      poseCtx.drawImage(
+        poseVideo,
+        0,0,
+        canvas.width,
+        canvas.height
+      );
+    }
 
     const {pose,posenetOutput}=await model.estimatePose(canvas);
     const predictions=await model.predict(posenetOutput);
