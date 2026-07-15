@@ -374,13 +374,28 @@ async function imageLoop(){
 }
 
 async function startPose(){
-  const size=420,flip=true;
-  poseWebcam=new tmPose.Webcam(size,size,flip);
-  await poseWebcam.setup();
-  await poseWebcam.play();
+  // Pose 專案改用與 Image 相同的相機控制方式，
+  // 讓前後鏡頭切換可以由 facingMode 控制。
+  stopImage(false);
+
+  imageStream=await navigator.mediaDevices.getUserMedia({
+    video:{
+      facingMode:{exact:facingMode},
+      width:{ideal:1280},
+      height:{ideal:720}
+    },
+    audio:false
+  });
+
+  $("imageVideo").srcObject=imageStream;
+  await $("imageVideo").play();
+
+  const size=420;
   const canvas=$("poseCanvas");
-  canvas.width=size;canvas.height=size;
+  canvas.width=size;
+  canvas.height=size;
   poseCtx=canvas.getContext("2d");
+
   setStatus("recognitionStatus","姿勢相機已啟動，請讓全身進入框內。","success");
   poseLoop();
 }
@@ -389,8 +404,8 @@ async function poseLoop(){
   if(posePredicting){poseRaf=requestAnimationFrame(poseLoop);return}
   posePredicting=true;
   try{
-    poseWebcam.update();
-    const {pose,posenetOutput}=await model.estimatePose(poseWebcam.canvas);
+    const video=$("imageVideo");
+    const {pose,posenetOutput}=await model.estimatePose(video);
     const predictions=await model.predict(posenetOutput);
     drawPose(pose);
     processPredictions(predictions,$("poseCanvas"));
@@ -400,10 +415,13 @@ async function poseLoop(){
   finally{posePredicting=false;if(!finished&&!paused&&poseWebcam)poseRaf=requestAnimationFrame(poseLoop)}
 }
 function drawPose(pose){
-  if(!poseCtx||!poseWebcam)return;
+  if(!poseCtx)return;
   const canvas=$("poseCanvas");
+  const video=$("imageVideo");
   poseCtx.clearRect(0,0,canvas.width,canvas.height);
-  poseCtx.drawImage(poseWebcam.canvas,0,0);
+  if(video.readyState>=2){
+    poseCtx.drawImage(video,0,0,canvas.width,canvas.height);
+  }
   if(pose){
     tmPose.drawKeypoints(pose.keypoints,0.5,poseCtx);
     tmPose.drawSkeleton(pose.keypoints,0.5,poseCtx);
@@ -535,6 +553,7 @@ function stopAll(){
   if(poseRaf)cancelAnimationFrame(poseRaf);
   poseRaf=null;
   if(poseWebcam){poseWebcam.stop();poseWebcam=null}
+  stopImage();
   stopAudio();
 }
 
@@ -561,9 +580,9 @@ async function switchCamera(){
   }
 
   if(projectType==="pose"){
-    if(poseWebcam){
-      poseWebcam.stop();
-      poseWebcam=null;
+    if(poseRaf){
+      cancelAnimationFrame(poseRaf);
+      poseRaf=null;
     }
     await startPose();
   }
