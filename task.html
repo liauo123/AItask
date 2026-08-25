@@ -301,7 +301,7 @@ $("logoutBtn").onclick=()=>window.close();
 function studentURL(id){
   const u=new URL("student.html",location.href);
   u.searchParams.set("task",id);
-  u.searchParams.set("v","3.5-speech-only-layout");
+  u.searchParams.set("v","3.6-github-speech-fix");
   return u.toString();
 }
 function showQR(id,title){
