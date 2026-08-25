@@ -1,113 +1,12 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>AI 教師任務平台 V2.0</title>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
-<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<style>
-:root{--b:#2563eb;--g:#16a34a;--r:#dc2626;--bg:#eef2f7;--m:#64748b;--l:#dbe2ea}*{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:"Noto Sans TC",Arial;color:#172033}header{background:#fff;box-shadow:0 2px 10px #0002;padding:14px 18px;position:sticky;top:0;z-index:20}.head{max-width:1100px;margin:auto;display:flex;justify-content:space-between;align-items:center}h1{margin:0;color:var(--b);font-size:22px}main{max-width:1100px;margin:auto;padding:18px}.card{background:#fff;border-radius:16px;padding:20px;margin-bottom:16px;box-shadow:0 3px 12px #0001}.grid{display:grid;gap:16px}@media(min-width:900px){.grid{grid-template-columns:1fr 1fr}}input{width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px;font-size:16px;margin:6px 0}button{border:0;border-radius:10px;padding:11px 15px;font-weight:800;cursor:pointer}.p{background:var(--b);color:#fff}.s{background:#fff;color:var(--b);border:1px solid #b7ccff}.d{background:#fff1f2;color:var(--r);border:1px solid #fecdd3}.row{display:flex;gap:10px;flex-wrap:wrap}.row>*{flex:1;min-width:140px}.status{padding:12px;border-radius:10px;background:#eff6ff;color:#1d4ed8;white-space:pre-wrap;margin-top:10px}.ok{background:#ecfdf5;color:#166534}.err{background:#fef2f2;color:#b91c1c}.hidden{display:none!important}.classBox{background:#f8fafc;padding:11px;border-radius:10px;margin:7px 0}.task{border:1px solid var(--l);border-radius:12px;padding:14px;margin:10px 0}.top{display:flex;justify-content:space-between;gap:10px}.title{font-size:18px;font-weight:900}.meta,.small{font-size:13px;color:var(--m);line-height:1.6}.badge{padding:4px 8px;border-radius:999px;background:#dbeafe;color:#1d4ed8;font-size:12px;font-weight:800}.rr{display:grid;grid-template-columns:1.2fr .7fr .7fr .7fr;gap:8px;padding:8px;border-bottom:1px solid #eef2f7;font-size:14px}.modal{position:fixed;inset:0;background:#0008;display:flex;align-items:center;justify-content:center;padding:20px;z-index:99}.box{background:#fff;padding:20px;border-radius:16px;text-align:center;max-width:380px;width:100%}.url{word-break:break-all;background:#f8fafc;padding:10px;border-radius:8px;margin:10px 0}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="refresh" content="0;url=teacher.html">
+  <title>AI學習任務平台</title>
 </head>
 <body>
-<header><div class="head"><div><h1>AI 教師任務平台 V2.0</h1><div class="small">任務管理、QR Code、學生完成度</div></div><div id="userArea" class="hidden"><span id="userEmail" class="small"></span> <button id="logoutBtn" class="s">登出</button></div></div></header>
-<main>
-<section id="authCard" class="card"><h2>教師登入</h2><div class="row"><input id="email" type="email" placeholder="教師 Email"><input id="password" type="password" placeholder="密碼（至少 6 碼）"></div><div class="row"><button id="loginBtn" class="p">登入</button><button id="registerBtn" class="s">建立教師帳號</button></div><div id="authStatus" class="status">請先登入。</div></section>
-<div id="app" class="hidden">
-<div class="grid">
-<section class="card"><h2>① 載入 Teachable Machine 模型</h2><input id="modelURL" placeholder="貼上 Image Model URL"><button id="loadModelBtn" class="p" style="width:100%">載入模型</button><div id="modelStatus" class="status">尚未載入模型。</div><div id="classes"></div></section>
-<section class="card"><h2>② 建立任務</h2><input id="taskTitle" placeholder="任務名稱"><input id="studentBaseURL" placeholder="學生端完整網址"><div class="row"><div><label>辨識門檻</label><input id="threshold" type="number" value="0.85" min="0.5" max="0.99" step="0.01"></div><div><label>連續影格</label><input id="frames" type="number" value="10" min="3" max="30"></div></div><button id="createBtn" class="p" style="width:100%" disabled>建立任務並傳送 Firebase</button><div id="createStatus" class="status">等待建立任務。</div></section>
-</div>
-<section class="card"><div class="top"><div><h2>③ 我的任務列表</h2><div class="small">重新產生 QR、查看學生完成度、刪除任務</div></div><button id="refreshBtn" class="s">重新整理</button></div><div id="taskList"></div></section>
-</div>
-</main>
-<div id="qrModal" class="modal hidden"><div class="box"><h3 id="qrTitle">任務 QR Code</h3><div id="qrCode"></div><div id="qrURL" class="url"></div><div class="row"><button id="copyBtn" class="p">複製網址</button><button id="closeBtn" class="s">關閉</button></div></div></div>
-<script>
-const firebaseConfig={apiKey:"AIzaSyBbpIezLbQd2-e-3Z4pSdBLIFc_UlTPUy8",authDomain:"project-6540500202923576846.firebaseapp.com",projectId:"project-6540500202923576846",storageBucket:"project-6540500202923576846.firebasestorage.app",messagingSenderId:"516602165604",appId:"1:516602165604:web:b60f69ee56a4d49c416271"};
-firebase.initializeApp(firebaseConfig);const auth=firebase.auth(),db=firebase.firestore();let user=null,model=null,modelURL="",labels=[],unsub=null;const $=id=>document.getElementById(id);const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));function status(id,msg,type=""){const e=$(id);e.textContent=msg;e.className="status "+type}
-auth.onAuthStateChanged(u=>{user=u;if(u){$("authCard").classList.add("hidden");$("app").classList.remove("hidden");$("userArea").classList.remove("hidden");$("userEmail").textContent=u.email||"教師";listen()}else{$("authCard").classList.remove("hidden");$("app").classList.add("hidden");$("userArea").classList.add("hidden");if(unsub)unsub()}});
-$("loginBtn").onclick=async()=>{try{await auth.signInWithEmailAndPassword($("email").value.trim(),$("password").value)}catch(e){status("authStatus","登入失敗：\n"+e.message,"err")}};
-$("registerBtn").onclick=async()=>{try{await auth.createUserWithEmailAndPassword($("email").value.trim(),$("password").value)}catch(e){status("authStatus","建立帳號失敗：\n"+e.message,"err")}};$("logoutBtn").onclick=()=>auth.signOut();
-$("loadModelBtn").onclick=async()=>{modelURL=$("modelURL").value.trim();if(!modelURL)return status("modelStatus","請輸入模型網址。","err");if(!modelURL.endsWith("/"))modelURL+="/";status("modelStatus","正在載入模型…");try{model=await tmImage.load(modelURL+"model.json",modelURL+"metadata.json");labels=model.getClassLabels();$("classes").innerHTML=labels.map((x,i)=>`<div class="classBox"><label><input type="checkbox" value="${esc(x)}" id="c${i}"> ${esc(x)}</label></div>`).join("");$("createBtn").disabled=false;status("modelStatus","模型載入成功，共 "+labels.length+" 類。","ok")}catch(e){status("modelStatus","模型載入失敗：\n"+e.message,"err")}};
-$("createBtn").onclick=async()=>{const title=$("taskTitle").value.trim(),targets=[...document.querySelectorAll("#classes input:checked")].map(x=>x.value);if(!title)return status("createStatus","請輸入任務名稱。","err");if(!targets.length)return status("createStatus","請至少選擇一項物品。","err");try{const ref=await db.collection("tasks").add({teacherId:user.uid,teacherEmail:user.email||"",title,modelURL,targetClasses:targets,threshold:Number($("threshold").value),requiredConsecutiveFrames:Number($("frames").value),orderMode:"fixed",status:"active",version:"2.0",createdAt:firebase.firestore.FieldValue.serverTimestamp()});status("createStatus","任務建立成功！\nTask ID："+ref.id,"ok");showQR(ref.id,title)}catch(e){status("createStatus","建立任務失敗：\n"+e.message,"err")}};
-function studentURL(id){const custom=$("studentBaseURL").value.trim(),base=custom||new URL("student.html",location.href).toString(),u=new URL(base,location.href);u.searchParams.set("task",id);return u.toString()}function showQR(id,title){const url=studentURL(id);$("qrTitle").textContent=title+"－QR Code";$("qrURL").textContent=url;$("qrCode").innerHTML="";new QRCode($("qrCode"),{text:url,width:260,height:260,correctLevel:QRCode.CorrectLevel.M});$("qrModal").classList.remove("hidden")}window.showQR=showQR;$("closeBtn").onclick=()=>$("qrModal").classList.add("hidden");$("copyBtn").onclick=()=>navigator.clipboard.writeText($("qrURL").textContent);
-function listen(){
-  if(unsub)unsub();
-  $("taskList").innerHTML='<div class="status">正在載入任務列表…</div>';
-  unsub=db.collection("tasks")
-    .where("teacherId","==",user.uid)
-    .onSnapshot(
-      async s=>{
-        try{await render(s.docs)}
-        catch(e){
-          console.error("任務列表顯示失敗",e);
-          $("taskList").innerHTML='<div class="status err">任務列表顯示失敗：'+esc(e.message||e)+'</div>';
-        }
-      },
-      e=>{
-        console.error("任務監聽失敗",e);
-        $("taskList").innerHTML='<div class="status err">任務讀取失敗：'+esc(e.message||e)+'</div>';
-      }
-    );
-}
-
-async function refreshTasks(){
-  const btn=$("refreshBtn");
-  if(!user)return;
-  btn.disabled=true;
-  btn.textContent="整理中…";
-  $("taskList").innerHTML='<div class="status">正在重新讀取任務與學生完成度…</div>';
-  try{
-    const snap=await db.collection("tasks").where("teacherId","==",user.uid).get();
-    await render(snap.docs);
-  }catch(e){
-    console.error("重新整理失敗",e);
-    $("taskList").innerHTML='<div class="status err">重新整理失敗：'+esc(e.message||e)+'</div>';
-  }finally{
-    btn.disabled=false;
-    btn.textContent="重新整理";
-  }
-}
-$("refreshBtn").onclick=refreshTasks;
-
-async function render(docs){
-  if(!docs.length){
-    $("taskList").innerHTML='<div class="status">尚未建立任務。</div>';
-    return;
-  }
-
-  const out=[];
-  for(const doc of docs){
-    const t=doc.data();
-    let resultDocs=[];
-    let resultError="";
-
-    try{
-      const rs=await db.collection("taskResults").where("teacherId","==",user.uid).where("taskId","==",doc.id).get();
-      resultDocs=rs.docs;
-    }catch(e){
-      console.warn("學生完成度讀取失敗",doc.id,e);
-      resultError=e.message||String(e);
-    }
-
-    const rows=resultDocs.map(r=>{
-      const d=r.data();
-      return `<div class="rr"><span>${esc(d.studentName||"未命名")}</span><span>${d.progress||0}%</span><span>${d.status==="completed"?"完成":"進行中"}</span><span>${d.attempts||0}</span></div>`;
-    }).join("");
-
-    const resultSection=resultError
-      ? `<div class="status err" style="margin-top:10px">任務可以正常顯示，但學生完成度讀取失敗：${esc(resultError)}</div>`
-      : `<div style="margin-top:12px"><b>學生完成度（${resultDocs.length} 人）</b><div class="rr"><b>學生</b><b>進度</b><b>狀態</b><b>誤判</b></div>${rows||'<div class="small" style="padding:10px">尚無學生紀錄</div>'}</div>`;
-
-    out.push(`<div class="task"><div class="top"><div><div class="title">${esc(t.title||"未命名任務")}</div><div class="meta">物品：${(t.targetClasses||[]).map(esc).join(" → ")}<br>門檻：${Math.round((t.threshold||.85)*100)}%｜連續 ${t.requiredConsecutiveFrames||10} 幀</div></div><span class="badge">${t.status||"active"}</span></div><div class="row" style="margin-top:12px"><button class="s" onclick="showQR('${doc.id}','${esc(t.title||"任務")}')">重新產生 QR</button><button class="d" onclick="delTask('${doc.id}')">刪除任務</button></div>${resultSection}</div>`);
-  }
-
-  $("taskList").innerHTML=out.join("");
-}
-window.delTask=async id=>{if(confirm("確定刪除此任務？"))await db.collection("tasks").doc(id).delete()};
-</script>
-</body></html>
+  <p>正在進入 <a href="teacher.html">AI學習任務平台</a>…</p>
+</body>
+</html>
