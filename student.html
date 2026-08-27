@@ -625,6 +625,40 @@ const firestorePersistenceReady=db.enablePersistence({synchronizeTabs:true}).cat
   }
 });
 
+let buttonSoundContext=null;
+function playButtonPressSound(){
+  try{
+    const AudioContextClass=window.AudioContext||window.webkitAudioContext;
+    if(!AudioContextClass)return;
+    if(!buttonSoundContext||buttonSoundContext.state==="closed")buttonSoundContext=new AudioContextClass();
+    const play=()=>{
+      const now=buttonSoundContext.currentTime;
+      const oscillator=buttonSoundContext.createOscillator();
+      const gain=buttonSoundContext.createGain();
+      oscillator.type="sine";
+      oscillator.frequency.setValueAtTime(620,now);
+      oscillator.frequency.exponentialRampToValueAtTime(820,now+0.07);
+      gain.gain.setValueAtTime(0.0001,now);
+      gain.gain.exponentialRampToValueAtTime(0.16,now+0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001,now+0.085);
+      oscillator.connect(gain);gain.connect(buttonSoundContext.destination);
+      oscillator.start(now);oscillator.stop(now+0.09);
+    };
+    if(buttonSoundContext.state==="suspended")buttonSoundContext.resume().then(play).catch(()=>{});
+    else play();
+  }catch(e){console.warn("按鈕音效播放失敗",e)}
+}
+function getEnabledButton(target){
+  const button=target&&target.closest?target.closest("button"):null;
+  return button&&!button.disabled&&button.getAttribute("aria-disabled")!=="true"?button:null;
+}
+document.addEventListener(window.PointerEvent?"pointerdown":"mousedown",event=>{
+  if(getEnabledButton(event.target))playButtonPressSound();
+},{capture:true});
+document.addEventListener("keydown",event=>{
+  if(!event.repeat&&(event.key==="Enter"||event.key===" ")&&getEnabledButton(event.target))playButtonPressSound();
+},{capture:true});
+
 let taskId="",task=null,projectType="",metadata=null,model=null;
 let ocrWorker=null,lastOcrText="",lastOcrConfidence=0;
 let browserSpeechRecognition=null,optionalAudioListening=false,optionalAudioStarting=false,optionalAudioTimer=null;
@@ -3371,7 +3405,7 @@ async function startOptionalAudioRecognition(){
   recognition.maxAlternatives=5;
 
   updateVerificationUI();
-  setVoiceResult(`正在聆聽，請說出「${target}」…`);
+  setVoiceResult("正在聆聽");
   recognition.onstart=()=>{
     optionalAudioStarting=false;
     if(
