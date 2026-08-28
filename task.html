@@ -476,7 +476,7 @@ async function render(docs){
     const t=doc.data();
     const isAdvanced=t.taskMode==="advanced";
     const recognitionInfo=`<div class="meta">辨識方式：${recognitionEngineName(t.recognitionEngine)}</div>`;
-    const workflowInfo=t.recognitionEngine==="ocr"&&t.skipPhotoRecognition?'<div class="meta">辨識流程：僅語音辨識（取消拍照辨識）</div>':"";
+    const workflowInfo=t.taskMode==="reading"||t.recognitionEngine==="ocr"&&t.skipPhotoRecognition?'<div class="meta">辨識流程：僅語音辨識（取消拍照辨識）</div>':"";
     let resultDocs=[],resultError="";
 
     try{

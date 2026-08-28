@@ -205,10 +205,8 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none}
       <section id="readingModeCard" class="card modeCard readingMode hidden">
         <h2>問答模式(讀)</h2>
         <input id="readingTitle" placeholder="問答模式(讀)名稱">
-        <div class="modeSettings">
-          <label class="modeSetting"><input id="readingDescriptionPrompt" type="checkbox" checked>說明文字出題</label>
-          <label class="modeSetting"><input id="readingThumbnailHint" type="checkbox" checked>縮圖提示</label>
-        </div>
+        <input id="readingDescriptionPrompt" type="checkbox" class="hidden" checked aria-hidden="true">
+        <input id="readingThumbnailHint" type="checkbox" class="hidden" checked aria-hidden="true">
         <input id="readingSpeechRecognition" type="checkbox" class="hidden" checked aria-hidden="true">
         <button id="createReadingBtn" class="p" style="width:100%" disabled>產生問答模式(讀) QR</button>
         <div id="readingStatus" class="status">尚未建立。</div>
@@ -387,8 +385,8 @@ function restoreTeacherDraftBase(){
   $("speakingRepeatCount").value=String(Math.min(5,Math.max(1,Number(draft.speakingRepeatCount||1))));
   updateSpeakingRepeatLabel();
   $("readingTitle").value=String(draft.readingTitle||"");
-  $("readingDescriptionPrompt").checked=draft.readingDescriptionPrompt===undefined?true:!!draft.readingDescriptionPrompt;
-  $("readingThumbnailHint").checked=draft.readingThumbnailHint===undefined?true:!!draft.readingThumbnailHint;
+  $("readingDescriptionPrompt").checked=true;
+  $("readingThumbnailHint").checked=true;
   $("readingSpeechRecognition").checked=true;
   $("clickTitle").value=String(draft.clickTitle||"");
   $("clickDisplaySeconds").value=String(Math.min(8,Math.max(3,Number(draft.clickDisplaySeconds||5))));
@@ -583,8 +581,8 @@ async function restoreTaskFromTaskList(taskId){
     }
     if(taskMode==="reading"){
       $("readingTitle").value=String(task.title||"");
-      $("readingDescriptionPrompt").checked=task.promptMode==="description";
-      $("readingThumbnailHint").checked=task.showThumbnailHint===undefined?true:!!task.showThumbnailHint;
+      $("readingDescriptionPrompt").checked=true;
+      $("readingThumbnailHint").checked=true;
       $("readingSpeechRecognition").checked=true;
     }
     if(taskMode==="evaluation"){
@@ -1283,8 +1281,8 @@ $("createBtn").onclick=async()=>{
 $("createReadingBtn").onclick=async()=>{
   const title=$("readingTitle").value.trim();
   const targets=getSelectedClassesInCurrentOrder();
-  const promptMode=$("readingDescriptionPrompt").checked?"description":"name";
-  const showThumbnailHint=$("readingThumbnailHint").checked;
+  const promptMode="description";
+  const showThumbnailHint=true;
   if(!title)return status("readingStatus","請輸入問答模式(讀)名稱。","err");
   if(!targets.length)return status("readingStatus","請至少選擇一項物品或文字。","err");
   const descriptions=getClassDescriptions(true);
@@ -1301,7 +1299,7 @@ $("createReadingBtn").onclick=async()=>{
       ...getRecognitionTaskFields(targets),targetClasses:targets,
       classDescriptions:getClassDescriptions(false),classThumbnails:getClassThumbnails(false),
       audioRequiredClasses:[...targets],promptMode,speechRecognitionEnabled:true,
-      skipPhotoRecognition:false,showNameText:false,showThumbnailHint,
+      skipPhotoRecognition:true,showNameText:false,showThumbnailHint,
       speechRecognitionMode:"browser",speechRecognitionLanguage:"zh-TW",
       requiredConsecutiveFrames:10,orderMode:"fixed",taskMode:"reading",
       status:"active",version:"3.7-reading-mode",

@@ -1127,7 +1127,7 @@ function isEvaluationMode(){
 }
 
 function isSpeechOnlyRecognition(){
-  return !!(task&&task.recognitionEngine==="ocr"&&task.skipPhotoRecognition&&(isEvaluationMode()||isGameMode()));
+  return !!(task&&task.skipPhotoRecognition&&(isReadingMode()||(task.recognitionEngine==="ocr"&&(isEvaluationMode()||isGameMode()))));
 }
 
 function applyTaskModeTheme(mode){
@@ -1536,7 +1536,7 @@ async function loadTask(){
     task.audioRequiredClasses=Array.isArray(task.audioRequiredClasses)
       ? task.audioRequiredClasses.filter(name=>task.targetClasses.includes(name))
       : [];
-    task.skipPhotoRecognition=task.recognitionEngine==="ocr"&&(isEvaluationMode()||isGameMode())&&!!task.skipPhotoRecognition;
+    task.skipPhotoRecognition=isReadingMode()?true:task.recognitionEngine==="ocr"&&(isEvaluationMode()||isGameMode())&&!!task.skipPhotoRecognition;
     if(task.skipPhotoRecognition)task.audioRequiredClasses=[...task.targetClasses];
     task.promptMode=task.promptMode==="description"?"description":"name";
     task.showNameText=task.recognitionEngine==="ocr"&&!!task.showNameText;
@@ -1572,6 +1572,9 @@ async function loadTask(){
       metadata={labels:[...task.targetClasses]};
     }else if(isClickMode()){
       projectType="click";
+      metadata={labels:[...task.targetClasses]};
+    }else if(isSpeechOnlyRecognition()){
+      projectType="image";
       metadata={labels:[...task.targetClasses]};
     }else if(task.recognitionEngine==="coco-ssd"||task.recognitionEngine==="ocr"){
       projectType="image";
@@ -2432,15 +2435,15 @@ $("clickTargets").addEventListener("click",event=>{
 });
 
 async function loadSelectedModel(){
+  if(isSpeechOnlyRecognition()){
+    const supportedLabels=[...task.targetClasses];
+    model={
+      getClassLabels:()=>[...supportedLabels],
+      predict:async()=>supportedLabels.map(className=>({className,probability:0}))
+    };
+    return;
+  }
   if(task.recognitionEngine==="ocr"){
-    if(isSpeechOnlyRecognition()){
-      const supportedLabels=[...task.targetClasses];
-      model={
-        getClassLabels:()=>[...supportedLabels],
-        predict:async()=>supportedLabels.map(className=>({className,probability:0}))
-      };
-      return;
-    }
     if(typeof Tesseract==="undefined"){
       throw new Error("OCR 文字辨識套件載入失敗，請確認網路連線後重新整理頁面。");
     }
