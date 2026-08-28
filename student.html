@@ -115,6 +115,11 @@ button{min-height:50px;border:0;border-radius:15px;padding:0 16px;cursor:pointer
 .target-question-row strong{margin-top:0}
 .target-thumbnail{width:72px;height:72px;object-fit:cover;border-radius:14px;border:2px solid #93c5fd;background:#fff;box-shadow:0 5px 14px rgba(37,99,235,.16);flex:0 0 auto}
 #advancedPromptCard.speech-only-prompt .target-thumbnail{width:144px;height:144px;border-radius:28px}
+body[data-mode-theme="click"] #clickPrompt #clickPromptImage,
+body[data-mode-theme="speaking"] #hanziTargetThumbnail,
+body[data-mode-theme="reading"] #advancedPromptCard.speech-only-prompt #advancedTargetThumbnail{width:min(288px,76vw);height:min(288px,76vw);border-radius:28px;object-fit:cover}
+body[data-mode-theme="speaking"] .hanzi-question-row,
+body[data-mode-theme="reading"] #advancedPromptCard .target-question-row{flex-direction:column}
 .progress-label{display:flex;justify-content:space-between;color:var(--muted);margin-bottom:7px}
 .progress{height:14px;background:#e7edf6;border-radius:999px;overflow:hidden;margin-bottom:14px}
 .progress>div{height:100%;width:0;background:var(--success);transition:width .2s}
@@ -339,6 +344,9 @@ html,body{
   .target-question-row strong{margin-top:0}
   .target-thumbnail{width:58px;height:58px;border-radius:11px}
   #advancedPromptCard.speech-only-prompt .target-thumbnail{width:116px;height:116px;border-radius:22px}
+  body[data-mode-theme="click"] #clickPrompt #clickPromptImage,
+  body[data-mode-theme="speaking"] #hanziTargetThumbnail,
+  body[data-mode-theme="reading"] #advancedPromptCard.speech-only-prompt #advancedTargetThumbnail{width:min(232px,76vw);height:min(232px,76vw);border-radius:22px}
   .progress{margin-bottom:7px}
   .teaching-name-card{
     padding:8px;
@@ -552,7 +560,7 @@ html,body{
 
   <section id="clickTaskCard" class="card click-task hidden">
     <div class="click-task-head">
-      <h2 id="clickTaskTitle">點選練習模式(聽)</h2>
+      <h2 id="clickTaskTitle">點選模式(聽)</h2>
       <div class="click-task-meta"><span id="clickStudentNumber"></span><span id="clickProgressText">0 / 0</span></div>
     </div>
     <div id="clickPrompt" class="click-prompt hidden">
@@ -568,7 +576,7 @@ html,body{
   </section>
 
   <section id="hanziTaskCard" class="card hanzi-card hidden">
-    <h2 id="hanziTaskTitle">文字練習模式(寫)</h2>
+    <h2 id="hanziTaskTitle">書寫模式(寫)</h2>
     <div id="hanziPracticeIntro" class="hanzi-note"></div>
     <div id="hanziPicker" class="hanzi-picker"></div>
     <div id="hanziCopyrightNotice" class="hanzi-copyright hidden">點選中文字後，將開啟教育部《國字標準字體筆順學習網》；點選英文字母後，將開啟 Tiny Steps 英文字母描寫練習。本系統僅提供網站連結；外部網站頁面、文字、圖像與書寫內容的著作權及使用規範，均依各網站公告為準。<br><a href="https://stroke-order.learningweb.moe.edu.tw/" target="_blank" rel="noopener noreferrer">教育部國字標準字體筆順學習網</a>｜<a href="https://tinystepslearning.com/free-letter-tracing-game-for-kids" target="_blank" rel="noopener noreferrer">Tiny Steps 英文字母描寫練習</a></div>
@@ -1585,7 +1593,7 @@ async function loadTask(){
       metadata=detected.metadata;
     }
 
-    const typeName=isSpeakingMode()?"口語練習":isHanziMode()?"文字練習":isClickMode()?"點選練習":task.recognitionEngine==="coco-ssd"
+    const typeName=isSpeakingMode()?"口語模式":isHanziMode()?"書寫模式":isClickMode()?"點選模式":task.recognitionEngine==="coco-ssd"
       ?"COCO-SSD 開放辨識"
       :task.recognitionEngine==="ocr"
         ?"OCR 文字辨識"
@@ -1596,9 +1604,9 @@ async function loadTask(){
       ? `｜${effectiveAudioRequiredClasses.length}項需要語音辨識`
       : "";
     $("taskMeta").textContent=isHanziMode()
-      ? `${isSpeakingMode()?"口語練習模式(說)":"文字練習模式(寫)"}｜${task.hanziSpeechEnabled?`逐項完整文字語音辨識｜每題 ${task.hanziRepeatCount} 次`:"開啟中英文書寫練習"}`
+      ? `${isSpeakingMode()?"口語模式(說)":"書寫模式(寫)"}｜${task.hanziSpeechEnabled?`逐項完整文字語音辨識｜每題 ${task.hanziRepeatCount} 次`:"開啟中英文書寫練習"}`
       : isClickMode()
-      ? `點選練習模式(聽)｜同時 ${task.clickSimultaneousCount} 種｜每個物品 ${task.clickRepeatCount} 次｜每次最多 ${task.clickDisplaySeconds} 秒`
+      ? `點選模式(聽)｜同時 ${task.clickSimultaneousCount} 種｜每個物品 ${task.clickRepeatCount} 次｜每次最多 ${task.clickDisplaySeconds} 秒`
       : task.taskMode==="teaching"
       ? `專案類型：${typeName}｜教學模式：拍照後顯示名稱與說明`
       : task.taskMode==="advanced"
@@ -1624,7 +1632,7 @@ async function loadTask(){
       });
       $("selectedNumberText").textContent="尚未選擇編號";
       $("startBtn").disabled=true;
-      $("startBtn").textContent=isGameMode()?"送出加入申請":isClickMode()?"開始點選練習":isSpeakingMode()?"開始口語練習":isHanziMode()?"開始文字練習":isReadingMode()?"開始問答":"開始任務";
+      $("startBtn").textContent=isGameMode()?"送出加入申請":isClickMode()?"開始點選模式":isSpeakingMode()?"開始口語模式":isHanziMode()?"開始書寫模式":isReadingMode()?"開始問答":"開始任務";
 
       $("joinCard").classList.remove("hidden");
       if(isGameMode()){
@@ -1854,7 +1862,7 @@ function showHanziPracticePicker(){
   $("hanziTestPanel").classList.add("hidden");
   $("hanziPicker").classList.remove("hidden");
   $("hanziCopyrightNotice").classList.remove("hidden");
-  $("hanziTaskTitle").textContent=task.title||"文字練習模式(寫)";
+  $("hanziTaskTitle").textContent=task.title||"書寫模式(寫)";
   $("hanziPracticeIntro").textContent="請點選中文字或英文字母，開啟對應的書寫練習頁面。";
   $("hanziPicker").innerHTML=task.targetClasses.map(char=>`<button class="hanzi-char" type="button" data-hanzi="${escapeHtml(char)}">${escapeHtml(char)}</button>`).join("");
 }
@@ -1912,7 +1920,7 @@ async function completeHanziCharacter(skipped=false){
   await saveHanziProgress(currentIndex>=task.targetClasses.length);
   if(currentIndex>=task.targetClasses.length){
     finished=true;$("hanziTaskCard").classList.add("hidden");$("completeCard").classList.remove("hidden");$("completeActions").classList.remove("hidden");
-    $("completeIcon").textContent="🎉";$("completeTitle").textContent=isSpeakingMode()?"口語練習完成！":"文字練習完成！";$("rankDisplay").classList.add("hidden");$("completeMessage").textContent=isSpeakingMode()?"已完成全部口語練習，結果已回傳教師端。":"已完成全部文字練習，結果已回傳教師端。";renderIncorrectSummary();return;
+    $("completeIcon").textContent="🎉";$("completeTitle").textContent=isSpeakingMode()?"口語模式完成！":"書寫模式完成！";$("rankDisplay").classList.add("hidden");$("completeMessage").textContent=isSpeakingMode()?"已完成全部口語練習，結果已回傳教師端。":"已完成全部書寫練習，結果已回傳教師端。";renderIncorrectSummary();return;
   }
   renderHanziQuestion();
 }
@@ -2000,7 +2008,7 @@ async function startHanziTest(){
     $("speakHanziBtn").disabled=false;
     $("loadCard").classList.add("hidden");$("joinCard").classList.add("hidden");$("hanziTaskCard").classList.remove("hidden");$("hanziPicker").classList.add("hidden");$("hanziTestPanel").classList.remove("hidden");
     $("hanziCopyrightNotice").classList.add("hidden");
-    $("hanziTaskTitle").textContent=task.title||(isSpeakingMode()?"口語練習模式(說)":"文字練習模式(寫)");$("hanziPracticeIntro").textContent="學生編號 "+selectedStudentNumber;renderHanziQuestion();
+    $("hanziTaskTitle").textContent=task.title||(isSpeakingMode()?"口語模式(說)":"書寫模式(寫)");$("hanziPracticeIntro").textContent="學生編號 "+selectedStudentNumber;renderHanziQuestion();
   }catch(e){setStatus("joinStatus",(isSpeakingMode()?"開始口語練習失敗：\n":"開始文字練習失敗：\n")+(e.message||e),"error");$("startBtn").disabled=false}
 }
 
@@ -2391,7 +2399,7 @@ async function startClickMode(){
       updatedAt:firebase.firestore.FieldValue.serverTimestamp()
     });
     clickSequence=buildClickSequence();clickTrialIndex=0;clickRecords=[];finished=false;paused=false;
-    $("clickTaskTitle").textContent=task.title||"點選練習模式(聽)";
+    $("clickTaskTitle").textContent=task.title||"點選模式(聽)";
     $("clickStudentNumber").textContent="學生編號 "+selectedStudentNumber;
     updateClickProgress();
     $("loadCard").classList.add("hidden");
