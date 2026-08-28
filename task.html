@@ -30,7 +30,7 @@ button:hover,.navBtn:hover{transform:translateY(-1px);filter:brightness(.99)}
 .status{padding:12px;border-radius:11px;background:#eff6ff;color:#1d4ed8;white-space:pre-wrap;margin-top:10px}
 .err{background:#fef2f2;color:#b91c1c}.hidden{display:none!important}
 .listHeader{align-items:center;margin-bottom:4px}.listHeader h2{margin:0;color:#17376b}.listHint{margin:8px 0 4px;padding:10px 12px;border-radius:10px;background:#f8fafc;border:1px solid #e5eaf0}
-.modeTabs{display:flex;gap:10px;overflow-x:auto;padding:8px 2px 5px;margin-top:10px;scrollbar-width:thin}.modeTab{flex:1 0 185px;border:2px solid transparent;white-space:nowrap;box-shadow:none}.modeTab.clickTab{background:#fef3c7;color:#92400e;border-color:#fbbf24}.modeTab.hanziTab{background:#fee2e2;color:#991b1b;border-color:#fb7185}.modeTab.speakingTab{background:#ede9fe;color:#6d28d9;border-color:#a78bfa}.modeTab.readingTab{background:#cffafe;color:#0e7490;border-color:#67e8f9}.modeTab.teachingTab{background:#dbeafe;color:#1d4ed8;border-color:#93c5fd}.modeTab.evaluationTab{background:#dcfce7;color:#166534;border-color:#86efac}.modeTab.gameTab{background:#ede9fe;color:#6d28d9;border-color:#c4b5fd}.modeTab[aria-selected="true"]{color:#fff;box-shadow:0 6px 15px rgba(15,23,42,.16)}.modeTab.clickTab[aria-selected="true"]{background:#ca8a04;border-color:#ca8a04}.modeTab.hanziTab[aria-selected="true"]{background:#dc2626;border-color:#dc2626}.modeTab.speakingTab[aria-selected="true"]{background:#7c3aed;border-color:#7c3aed}.modeTab.readingTab[aria-selected="true"]{background:#0891b2;border-color:#0891b2}.modeTab.teachingTab[aria-selected="true"]{background:#2563eb;border-color:#2563eb}.modeTab.evaluationTab[aria-selected="true"]{background:#16a34a;border-color:#16a34a}.modeTab.gameTab[aria-selected="true"]{background:#7c3aed;border-color:#7c3aed}
+.modeTabs{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;overflow:visible;padding:8px 2px 5px;margin-top:10px}.modeTab{min-width:0;padding:9px 5px;border:2px solid transparent;white-space:normal;line-height:1.25;font-size:12px;box-shadow:none}.modeTab.clickTab{background:#fef3c7;color:#92400e;border-color:#fbbf24}.modeTab.hanziTab{background:#fee2e2;color:#991b1b;border-color:#fb7185}.modeTab.speakingTab{background:#dbeafe;color:#1d4ed8;border-color:#93c5fd}.modeTab.readingTab{background:#cffafe;color:#0e7490;border-color:#67e8f9}.modeTab.evaluationTab{background:#dcfce7;color:#166534;border-color:#86efac}.modeTab.gameTab{background:#ede9fe;color:#6d28d9;border-color:#c4b5fd}.modeTab[aria-selected="true"]{color:#fff;box-shadow:0 6px 15px rgba(15,23,42,.16)}.modeTab.clickTab[aria-selected="true"]{background:#ca8a04;border-color:#ca8a04}.modeTab.hanziTab[aria-selected="true"]{background:#dc2626;border-color:#dc2626}.modeTab.speakingTab[aria-selected="true"]{background:#2563eb;border-color:#2563eb}.modeTab.readingTab[aria-selected="true"]{background:#0891b2;border-color:#0891b2}.modeTab.evaluationTab[aria-selected="true"]{background:#16a34a;border-color:#16a34a}.modeTab.gameTab[aria-selected="true"]{background:#7c3aed;border-color:#7c3aed}
 .task{border:1px solid #dbe4ee;border-radius:14px;padding:17px;margin:13px 0;background:rgba(255,255,255,.76);box-shadow:0 5px 14px rgba(15,23,42,.055)}
 .modeSection{position:relative;overflow:hidden;padding:18px;border-radius:17px;margin-top:18px}
 .modeSection::after{content:"";position:absolute;width:120px;height:120px;border-radius:50%;right:-56px;top:-58px;background:currentColor;opacity:.045;pointer-events:none}
@@ -40,7 +40,7 @@ button:hover,.navBtn:hover{transform:translateY(-1px);filter:brightness(.99)}
 .modeSection.game{background:var(--game-bg);border:1px solid var(--game-border)}
 .modeSection.click{background:var(--click-bg);border:1px solid var(--click-border)}
 .modeSection.hanzi{background:var(--hanzi-bg);border:1px solid var(--hanzi-border)}
-.modeSection.speaking{background:#f5f3ff;border:1px solid #a78bfa}.modeSection.reading{background:#ecfeff;border:1px solid #67e8f9}
+.modeSection.speaking{background:#f0f7ff;border:1px solid #93c5fd}.modeSection.reading{background:#ecfeff;border:1px solid #67e8f9}
 .modeTitle{margin:0 0 12px;padding-bottom:10px;border-bottom:2px solid}
 .modeSection.teaching .modeTitle{color:#1d4ed8;border-color:#93c5fd}
 .modeSection.evaluation .modeTitle{color:#166534;border-color:#86efac}
@@ -48,9 +48,9 @@ button:hover,.navBtn:hover{transform:translateY(-1px);filter:brightness(.99)}
 .modeSection.game .modeTitle{color:#6d28d9;border-color:#c4b5fd}
 .modeSection.click .modeTitle{color:#92400e;border-color:#fbbf24}
 .modeSection.hanzi .modeTitle{color:#991b1b;border-color:#fb7185}
-.modeSection.speaking .modeTitle{color:#6d28d9;border-color:#a78bfa}.modeSection.reading .modeTitle{color:#0e7490;border-color:#67e8f9}
-.task.teachingTask{border-left:5px solid #3b82f6}.task.evaluationTask{border-left:5px solid #22c55e}.task.advancedTask{border-left:5px solid #14b8a6}.task.gameTask{border-left:5px solid #8b5cf6}.task.clickTask{border-left:5px solid #f59e0b}.task.hanziTask{border-left:5px solid #dc2626}
-.modeBadge{display:inline-flex;align-items:center;padding:4px 9px;border-radius:999px;font-size:12px;font-weight:900;margin-bottom:7px}.teachingTask .modeBadge{background:#dbeafe;color:#1d4ed8}.evaluationTask .modeBadge{background:#dcfce7;color:#166534}.readingTask .modeBadge{background:#cffafe;color:#0e7490}.advancedTask .modeBadge{background:#ccfbf1;color:#0f766e}.gameTask .modeBadge{background:#ede9fe;color:#6d28d9}.clickTask .modeBadge{background:#fef3c7;color:#92400e}.hanziTask .modeBadge{background:#fee2e2;color:#991b1b}.speakingTask .modeBadge{background:#ede9fe;color:#6d28d9}
+.modeSection.speaking .modeTitle{color:#1d4ed8;border-color:#93c5fd}.modeSection.reading .modeTitle{color:#0e7490;border-color:#67e8f9}
+.task.teachingTask{border-left:5px solid #3b82f6}.task.evaluationTask{border-left:5px solid #22c55e}.task.advancedTask{border-left:5px solid #14b8a6}.task.gameTask{border-left:5px solid #8b5cf6}.task.clickTask{border-left:5px solid #f59e0b}.task.hanziTask{border-left:5px solid #dc2626}.task.speakingTask{border-left:5px solid #2563eb}
+.modeBadge{display:inline-flex;align-items:center;padding:4px 9px;border-radius:999px;font-size:12px;font-weight:900;margin-bottom:7px}.teachingTask .modeBadge{background:#dbeafe;color:#1d4ed8}.evaluationTask .modeBadge{background:#dcfce7;color:#166534}.readingTask .modeBadge{background:#cffafe;color:#0e7490}.advancedTask .modeBadge{background:#ccfbf1;color:#0f766e}.gameTask .modeBadge{background:#ede9fe;color:#6d28d9}.clickTask .modeBadge{background:#fef3c7;color:#92400e}.hanziTask .modeBadge{background:#fee2e2;color:#991b1b}.speakingTask .modeBadge{background:#dbeafe;color:#1d4ed8}
 .gameState{display:inline-block;padding:5px 10px;border-radius:999px;background:#ddd6fe;color:#6d28d9;font-size:12px;font-weight:900;margin-top:6px}
 .playerRow{display:grid;grid-template-columns:.7fr 1fr 1fr auto;gap:8px;align-items:center;padding:9px;border-bottom:1px solid #ede9fe;font-size:14px}.playerRow:first-child{font-weight:900;background:#faf5ff;border-radius:10px}.playerActions{display:flex;gap:6px}.playerActions button{min-width:auto;padding:7px 10px}.rank1{background:#fef3c7}.rank2{background:#f1f5f9}.rank3{background:#ffedd5}
 .task+.task{margin-top:16px}
@@ -69,6 +69,7 @@ button:hover,.navBtn:hover{transform:translateY(-1px);filter:brightness(.99)}
 @media(max-width:650px){
   header{padding:11px 12px}.brandMark{width:38px;height:38px}.head{align-items:flex-start}
   main{padding:14px 10px 28px}.card{padding:16px;border-radius:15px}
+  .modeTabs{grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}.modeTab{font-size:11px;padding:8px 4px}
   .modeSection{padding:13px;margin-top:13px}.rr{grid-template-columns:1fr 1fr}.playerRow{grid-template-columns:.6fr 1fr 1fr}.playerActions{grid-column:1/-1}.playerActions button{flex:1}
   .listHeader{align-items:flex-start}.listHeader h2{font-size:20px}.navBtn,button{padding:10px 12px}
 }
@@ -79,7 +80,7 @@ button:hover,.navBtn:hover{transform:translateY(-1px);filter:brightness(.99)}
   <div class="head">
     <div class="brand">
       <div class="brandMark">AI</div>
-      <div><h1>教師平台</h1><div class="small">教學評量遊戲列表</div></div>
+      <div><h1>教師平台</h1><div class="small">任務列表</div></div>
     </div>
     <div id="userArea" class="hidden">
       <button id="logoutBtn" class="s">關閉</button>
@@ -99,7 +100,7 @@ button:hover,.navBtn:hover{transform:translateY(-1px);filter:brightness(.99)}
 
   <section id="taskCard" class="card hidden">
     <div class="top listHeader">
-      <div><h2>教學與評量列表</h2></div>
+      <div><h2>任務列表</h2></div>
       <button id="refreshBtn" class="s">重新整理</button>
     </div>
     <div class="modeTabs" role="tablist" aria-label="選擇任務模式">
@@ -107,8 +108,7 @@ button:hover,.navBtn:hover{transform:translateY(-1px);filter:brightness(.99)}
       <button class="modeTab speakingTab" type="button" data-mode="speaking" role="tab" aria-selected="false">口語模式(說)</button>
       <button class="modeTab readingTab" type="button" data-mode="reading" role="tab" aria-selected="false">問答模式(讀)</button>
       <button class="modeTab hanziTab" type="button" data-mode="hanzi" role="tab" aria-selected="false">書寫模式(寫)</button>
-      <button class="modeTab teachingTab" type="button" data-mode="teaching" role="tab" aria-selected="false">物品(文字)辨識教學模式</button>
-      <button class="modeTab evaluationTab" type="button" data-mode="evaluation" role="tab" aria-selected="false">評量模式</button>
+      <button class="modeTab evaluationTab" type="button" data-mode="evaluation" role="tab" aria-selected="false">拍照辨識模式</button>
       <button class="modeTab gameTab" type="button" data-mode="game" role="tab" aria-selected="false">多人遊戲模式</button>
     </div>
     <div class="small listHint">點選上方模式按鈕可查看相關資訊列表。可先匯出學生結果，再只清除辨識照片；「完整刪除」會一併清除學生紀錄、照片與遊戲資料。</div>
@@ -363,7 +363,7 @@ function applyModeFilter(){
   sections.forEach(section=>section.classList.toggle("hidden",section.dataset.mode!==activeMode));
   const oldEmpty=$("modeEmpty");if(oldEmpty)oldEmpty.remove();
   if(!sections.some(section=>section.dataset.mode===activeMode)){
-    const names={click:"點選模式(聽)",speaking:"口語模式(說)",reading:"問答模式(讀)",teaching:"物品(文字)辨識教學模式",hanzi:"書寫模式(寫)",evaluation:"評量模式",game:"多人遊戲模式"};
+    const names={click:"點選模式(聽)",speaking:"口語模式(說)",reading:"問答模式(讀)",hanzi:"書寫模式(寫)",evaluation:"拍照辨識模式",game:"多人遊戲模式"};
     const empty=document.createElement("div");empty.id="modeEmpty";empty.className="status";empty.textContent="目前沒有「"+names[activeMode]+"」資料。";
     $("taskList").appendChild(empty);
   }
@@ -386,7 +386,7 @@ async function render(docs){
   };
 
   const newestFirst=[...docs].sort((a,b)=>getTime(b)-getTime(a));
-  const teachingDocs=newestFirst.filter(doc=>doc.data().taskMode==="teaching");
+  const teachingDocs=[];
   const gameDocs=newestFirst.filter(doc=>doc.data().taskMode==="game");
   const advancedDocs=newestFirst.filter(doc=>doc.data().taskMode==="advanced");
   const clickDocs=newestFirst.filter(doc=>doc.data().taskMode==="click");
@@ -543,9 +543,9 @@ async function render(docs){
     return `<div class="task ${isAdvanced?"advancedTask":isReading?"readingTask":"evaluationTask"}">
       <div class="top">
         <div>
-          <span class="modeBadge">${isAdvanced?"進階評量模式":isReading?"問答模式(讀)":"評量模式"}</span>
+          <span class="modeBadge">${isAdvanced?"進階評量模式":isReading?"問答模式(讀)":"拍照辨識模式"}</span>
           <div class="titleLine">
-            <div class="title">${esc(t.title||(isAdvanced?"未命名進階評量":isReading?"未命名問答模式(讀)":"未命名評量"))}</div>
+            <div class="title">${esc(t.title||(isAdvanced?"未命名進階評量":isReading?"未命名問答模式(讀)":"未命名拍照辨識模式"))}</div>
             <button class="s restoreTeacherBtn" type="button" onclick="restoreTeacherPlatform('${doc.id}')">回復教師平台</button>
           </div>
           ${recognitionInfo}
@@ -555,7 +555,7 @@ async function render(docs){
         </div>
       </div>
       <div class="row" style="margin-top:12px">
-        <button class="s" onclick="showQR('${doc.id}','${esc(t.title||(isAdvanced?"進階評量":isReading?"問答模式(讀)":"評量"))}')">重新產生 QR</button>
+        <button class="s" onclick="showQR('${doc.id}','${esc(t.title||(isAdvanced?"進階評量":isReading?"問答模式(讀)":"拍照辨識模式"))}')">重新產生 QR</button>
         <button class="s" onclick="exportTaskCSV('${doc.id}')">匯出結果 CSV</button>
         <button class="w" onclick="clearTaskPhotos('${doc.id}')">只清除照片</button>
         <button class="d" onclick="delTask('${doc.id}')">完整刪除</button>
@@ -651,7 +651,7 @@ async function render(docs){
   }
 
   if(evaluationDocs.length){
-    sections.push('<section class="modeSection evaluation" data-mode="evaluation"><h2 class="modeTitle">評量模式資訊</h2>');
+    sections.push('<section class="modeSection evaluation" data-mode="evaluation"><h2 class="modeTitle">拍照辨識模式資訊</h2>');
     const evaluationHtml=await Promise.all(evaluationDocs.map(renderEvaluationTask));
     sections.push(evaluationHtml.join(""));
     sections.push('</section>');

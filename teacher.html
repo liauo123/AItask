@@ -75,11 +75,12 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none}
 .gameMode{background:#faf5ff;border-color:#c4b5fd;color:#6d28d9}
 .clickMode{background:#fff8ed;border-color:#fbbf24;color:#92400e}
 .hanziMode{background:#fff1f2;border-color:#fb7185;color:#9f1239}
-.speakingMode{background:#f5f3ff;border-color:#a78bfa;color:#6d28d9}
+.speakingMode{background:#f0f7ff;border-color:#93c5fd;color:#1d4ed8}
 .readingMode{background:#ecfeff;border-color:#67e8f9;color:#0e7490}
 #clickModeCard{order:1}#speakingModeCard{order:2}#readingModeCard{order:3}#hanziModeCard{order:4}#teachMode{order:5}#createTaskCard{order:6}#advancedModeCard{order:7}#gameModeCard{order:8}
+#teachMode{display:none!important}
 .modeCard input{color:var(--ink)}.modeCard .status{background:rgba(255,255,255,.66);color:inherit}
-.teachMode .p{background:#2563eb}.modeCard#createTaskCard .p{background:#16a34a}.modeCard#advancedModeCard .p{background:#0f766e}.gameMode .p{background:#7c3aed}.clickMode .p{background:#d97706}.hanziMode .p{background:#dc2626}.speakingMode .p{background:#7c3aed}.readingMode .p{background:#0891b2}
+.teachMode .p{background:#2563eb}.modeCard#createTaskCard .p{background:#16a34a}.modeCard#advancedModeCard .p{background:#0f766e}.gameMode .p{background:#7c3aed}.clickMode .p{background:#d97706}.hanziMode .p{background:#dc2626}.speakingMode .p{background:#2563eb}.readingMode .p{background:#0891b2}
 .gameHint{font-size:13px;line-height:1.7;color:#6d28d9;margin:-4px 0 10px}
 .clickHint{font-size:13px;line-height:1.7;color:#92400e;margin:-4px 0 10px}
 .removedMode{display:none!important}
@@ -102,7 +103,7 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none}
 </style>
 </head>
 <body>
-<header><div class="head"><div class="brand"><div class="brandMark">AI</div><div><h1>教師平台</h1><div class="small">建立教學與評量・產生學生 QR Code</div></div></div><div id="userArea" class="hidden"><span id="userEmail" class="small"></span> <a class="navBtn" href="task.html" target="_blank" rel="noopener noreferrer">教學評量遊戲列表</a> <button id="logoutBtn" class="s">登出</button></div></div></header>
+<header><div class="head"><div class="brand"><div class="brandMark">AI</div><div><h1>教師平台</h1><div class="small">建立教學與評量・產生學生 QR Code</div></div></div><div id="userArea" class="hidden"><span id="userEmail" class="small"></span> <a class="navBtn" href="task.html" target="_blank" rel="noopener noreferrer">任務列表</a> <button id="logoutBtn" class="s">登出</button></div></div></header>
 <main>
 <section id="authCard" class="card">
   <h2>教師登入</h2>
@@ -190,8 +191,8 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none}
       </section>
 
       <section id="createTaskCard" class="card modeCard hidden">
-        <h2>評量模式</h2>
-        <input id="taskTitle" placeholder="評量模式名稱">
+        <h2>拍照辨識模式</h2>
+        <input id="taskTitle" placeholder="拍照辨識模式名稱">
         <div class="modeSettings">
           <label class="modeSetting"><input id="evaluationDescriptionPrompt" type="checkbox">說明文字出題</label>
           <label id="evaluationNameTextSetting" class="modeSetting hidden"><input id="evaluationShowNameText" type="checkbox">顯示名稱文字</label>
@@ -199,7 +200,7 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none}
           <label class="modeSetting"><input id="evaluationSpeechRecognition" type="checkbox">語音辨識</label>
           <label id="evaluationSkipPhotoSetting" class="modeSetting hidden"><input id="evaluationSkipPhotoRecognition" type="checkbox">取消拍照辨識</label>
         </div>
-        <button id="createBtn" class="p" style="width:100%" disabled>產生評量 QR</button>
+        <button id="createBtn" class="p" style="width:100%" disabled>產生拍照辨識 QR</button>
         <div id="createStatus" class="status">尚未建立。</div>
       </section>
 
@@ -1232,7 +1233,7 @@ $("speakingRepeatCount").addEventListener("input",()=>{updateSpeakingRepeatLabel
 $("createBtn").onclick=async()=>{
   const title=$("taskTitle").value.trim();
   const targets=getSelectedClassesInCurrentOrder();
-  if(!title)return status("createStatus","請輸入評量模式名稱。","err");
+  if(!title)return status("createStatus","請輸入拍照辨識模式名稱。","err");
   if(!targets.length)return status("createStatus","請至少選擇一項物品。","err");
   const promptMode=$("evaluationDescriptionPrompt").checked?"description":"name";
   const skipPhotoRecognition=getSelectedRecognitionEngine()==="ocr"&&$("evaluationSkipPhotoRecognition").checked;
@@ -1272,10 +1273,10 @@ $("createBtn").onclick=async()=>{
       version:"3.5-speech-only-layout",
       createdAt:firebase.firestore.FieldValue.serverTimestamp()
     });
-    status("createStatus","評量建立成功！\nTask ID："+ref.id,"ok");
+    status("createStatus","拍照辨識模式建立成功！\nTask ID："+ref.id,"ok");
     showQR(ref.id,title);
   }catch(e){
-    status("createStatus","建立評量失敗：\n"+e.message,"err");
+    status("createStatus","建立拍照辨識模式失敗：\n"+e.message,"err");
   }
 };
 
