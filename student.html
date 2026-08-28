@@ -552,7 +552,7 @@ html,body{
 
   <section id="clickTaskCard" class="card click-task hidden">
     <div class="click-task-head">
-      <h2 id="clickTaskTitle">隨機點選測驗</h2>
+      <h2 id="clickTaskTitle">點選練習模式(聽)</h2>
       <div class="click-task-meta"><span id="clickStudentNumber"></span><span id="clickProgressText">0 / 0</span></div>
     </div>
     <div id="clickPrompt" class="click-prompt hidden">
@@ -568,7 +568,7 @@ html,body{
   </section>
 
   <section id="hanziTaskCard" class="card hanzi-card hidden">
-    <h2 id="hanziTaskTitle">國字練習模式</h2>
+    <h2 id="hanziTaskTitle">文字練習模式(寫)</h2>
     <div id="hanziPracticeIntro" class="hanzi-note"></div>
     <div id="hanziPicker" class="hanzi-picker"></div>
     <div id="hanziCopyrightNotice" class="hanzi-copyright hidden">點選中文字後，將開啟教育部《國字標準字體筆順學習網》；點選英文字母後，將開啟 Tiny Steps 英文字母描寫練習。本系統僅提供網站連結；外部網站頁面、文字、圖像與書寫內容的著作權及使用規範，均依各網站公告為準。<br><a href="https://stroke-order.learningweb.moe.edu.tw/" target="_blank" rel="noopener noreferrer">教育部國字標準字體筆順學習網</a>｜<a href="https://tinystepslearning.com/free-letter-tracing-game-for-kids" target="_blank" rel="noopener noreferrer">Tiny Steps 英文字母描寫練習</a></div>
@@ -1111,7 +1111,15 @@ function isClickMode(){
 }
 
 function isHanziMode(){
-  return !!(task&&task.taskMode==="hanzi");
+  return !!(task&&["hanzi","speaking"].includes(task.taskMode));
+}
+
+function isSpeakingMode(){
+  return !!(task&&task.taskMode==="speaking");
+}
+
+function isReadingMode(){
+  return !!(task&&task.taskMode==="reading");
 }
 
 function isEvaluationMode(){
@@ -1123,7 +1131,11 @@ function isSpeechOnlyRecognition(){
 }
 
 function applyTaskModeTheme(mode){
-  const themeKey=mode==="hanzi"
+  const themeKey=mode==="speaking"
+    ? "speaking"
+    : mode==="reading"
+    ? "reading"
+    : mode==="hanzi"
     ? "hanzi"
     : mode==="click"
     ? "click"
@@ -1137,7 +1149,9 @@ function applyTaskModeTheme(mode){
     teaching:{primary:"#2563eb",dark:"#1d4ed8",soft:"#f0f7ff",strong:"#dbeafe",border:"#93c5fd",text:"#1d4ed8",shadow:"rgba(37,99,235,.22)"},
     evaluation:{primary:"#16a34a",dark:"#15803d",soft:"#ecfdf5",strong:"#dcfce7",border:"#86efac",text:"#166534",shadow:"rgba(22,163,74,.22)"},
     game:{primary:"#7c3aed",dark:"#6d28d9",soft:"#faf5ff",strong:"#ede9fe",border:"#c4b5fd",text:"#6d28d9",shadow:"rgba(124,58,237,.22)"},
-    hanzi:{primary:"#dc2626",dark:"#b91c1c",soft:"#fff1f2",strong:"#ffe4e6",border:"#fb7185",text:"#991b1b",shadow:"rgba(220,38,38,.22)"}
+    hanzi:{primary:"#dc2626",dark:"#b91c1c",soft:"#fff1f2",strong:"#ffe4e6",border:"#fb7185",text:"#991b1b",shadow:"rgba(220,38,38,.22)"},
+    speaking:{primary:"#7c3aed",dark:"#6d28d9",soft:"#f5f3ff",strong:"#ede9fe",border:"#a78bfa",text:"#6d28d9",shadow:"rgba(124,58,237,.22)"},
+    reading:{primary:"#0891b2",dark:"#0e7490",soft:"#ecfeff",strong:"#cffafe",border:"#67e8f9",text:"#0e7490",shadow:"rgba(8,145,178,.22)"}
   };
   const theme=themes[themeKey];
   const root=document.documentElement;
@@ -1568,7 +1582,7 @@ async function loadTask(){
       metadata=detected.metadata;
     }
 
-    const typeName=isHanziMode()?"國字練習":isClickMode()?"隨機點選測驗":task.recognitionEngine==="coco-ssd"
+    const typeName=isSpeakingMode()?"口語練習":isHanziMode()?"文字練習":isClickMode()?"點選練習":task.recognitionEngine==="coco-ssd"
       ?"COCO-SSD 開放辨識"
       :task.recognitionEngine==="ocr"
         ?"OCR 文字辨識"
@@ -1579,16 +1593,16 @@ async function loadTask(){
       ? `｜${effectiveAudioRequiredClasses.length}項需要語音辨識`
       : "";
     $("taskMeta").textContent=isHanziMode()
-      ? `國字練習｜${task.hanziSpeechEnabled?`逐項完整文字語音辨識｜每題 ${task.hanziRepeatCount} 次`:"開啟中英文書寫練習"}`
+      ? `${isSpeakingMode()?"口語練習模式(說)":"文字練習模式(寫)"}｜${task.hanziSpeechEnabled?`逐項完整文字語音辨識｜每題 ${task.hanziRepeatCount} 次`:"開啟中英文書寫練習"}`
       : isClickMode()
-      ? `隨機點選測驗｜同時 ${task.clickSimultaneousCount} 種｜每個物品 ${task.clickRepeatCount} 次｜每次最多 ${task.clickDisplaySeconds} 秒`
+      ? `點選練習模式(聽)｜同時 ${task.clickSimultaneousCount} 種｜每個物品 ${task.clickRepeatCount} 次｜每次最多 ${task.clickDisplaySeconds} 秒`
       : task.taskMode==="teaching"
       ? `專案類型：${typeName}｜教學模式：拍照後顯示名稱與說明`
       : task.taskMode==="advanced"
         ? `專案類型：${typeName}｜進階評量：依語音說明找出正確物品${audioNote}`
         : task.taskMode==="game"
           ? `多人尋物遊戲｜教師開始後，每位學生會收到不同的隨機物品順序${task.skipPhotoRecognition?"｜僅語音辨識":audioNote}`
-          : `專案類型：${typeName}｜${task.promptMode==="description"?"說明文字語音出題":"物品名稱語音出題"}${task.skipPhotoRecognition?"｜僅語音辨識":audioNote}｜順序：${task.targetClasses.join(" → ")}`;
+          : `專案類型：${typeName}｜${isReadingMode()?"問答模式(讀)｜":""}${task.promptMode==="description"?"說明文字語音出題":"物品名稱語音出題"}${task.skipPhotoRecognition?"｜僅語音辨識":audioNote}｜順序：${task.targetClasses.join(" → ")}`;
     if(isHanziMode()&&!task.hanziSpeechEnabled){
       $("joinCard").classList.add("hidden");
       showHanziPracticePicker();
@@ -1607,7 +1621,7 @@ async function loadTask(){
       });
       $("selectedNumberText").textContent="尚未選擇編號";
       $("startBtn").disabled=true;
-      $("startBtn").textContent=isGameMode()?"送出加入申請":isClickMode()?"開始點選測驗":isHanziMode()?"開始文字測試":"開始任務";
+      $("startBtn").textContent=isGameMode()?"送出加入申請":isClickMode()?"開始點選練習":isSpeakingMode()?"開始口語練習":isHanziMode()?"開始文字練習":isReadingMode()?"開始問答":"開始任務";
 
       $("joinCard").classList.remove("hidden");
       if(isGameMode()){
@@ -1837,7 +1851,7 @@ function showHanziPracticePicker(){
   $("hanziTestPanel").classList.add("hidden");
   $("hanziPicker").classList.remove("hidden");
   $("hanziCopyrightNotice").classList.remove("hidden");
-  $("hanziTaskTitle").textContent=task.title||"國字練習模式";
+  $("hanziTaskTitle").textContent=task.title||"文字練習模式(寫)";
   $("hanziPracticeIntro").textContent="請點選中文字或英文字母，開啟對應的書寫練習頁面。";
   $("hanziPicker").innerHTML=task.targetClasses.map(char=>`<button class="hanzi-char" type="button" data-hanzi="${escapeHtml(char)}">${escapeHtml(char)}</button>`).join("");
 }
@@ -1853,6 +1867,8 @@ function renderHanziQuestion(){
   $("hanziProgressText").textContent=`${currentIndex} / ${total}`;
   $("hanziProgressFill").style.width=Math.round(currentIndex/total*100)+"%";
   $("hanziQuestion").textContent=target||"完成";
+  const stageTitle=document.querySelector(".hanzi-stage-title");
+  if(stageTitle)stageTitle.textContent=isSpeakingMode()?"請說出這個文字":"請完成這個文字";
   updateThumbnailElement("hanziTargetThumbnail",target,"文字練習題目縮圖");
   $("hanziSpeechPanel").classList.remove("hidden");
   setStatus("hanziStatus","請按下按鈕並完整念出畫面上的文字。");
@@ -1893,7 +1909,7 @@ async function completeHanziCharacter(skipped=false){
   await saveHanziProgress(currentIndex>=task.targetClasses.length);
   if(currentIndex>=task.targetClasses.length){
     finished=true;$("hanziTaskCard").classList.add("hidden");$("completeCard").classList.remove("hidden");$("completeActions").classList.remove("hidden");
-    $("completeIcon").textContent="🎉";$("completeTitle").textContent="國字測驗完成！";$("rankDisplay").classList.add("hidden");$("completeMessage").textContent="已完成全部國字練習，結果已回傳教師端。";renderIncorrectSummary();return;
+    $("completeIcon").textContent="🎉";$("completeTitle").textContent=isSpeakingMode()?"口語練習完成！":"文字練習完成！";$("rankDisplay").classList.add("hidden");$("completeMessage").textContent=isSpeakingMode()?"已完成全部口語練習，結果已回傳教師端。":"已完成全部文字練習，結果已回傳教師端。";renderIncorrectSummary();return;
   }
   renderHanziQuestion();
 }
@@ -1970,19 +1986,19 @@ function recognizeHanziSpeech(){
 
 async function startHanziTest(){
   if(!selectedStudentNumber)return setStatus("joinStatus","請先選擇學生編號。","error");
-  $("startBtn").disabled=true;setStatus("joinStatus","正在建立國字測驗紀錄…");
+  $("startBtn").disabled=true;setStatus("joinStatus",isSpeakingMode()?"正在建立口語練習紀錄…":"正在建立文字練習紀錄…");
   try{
     disableHanziCamera();
     const currentUser=await ensureAuth();
-    resultRef=await db.collection("taskResults").add({taskId,teacherId:task.teacherId||"",studentUid:currentUser.uid,studentName:"學生 "+selectedStudentNumber,studentCode:selectedStudentNumber,projectType:"hanzi",targetClasses:[...task.targetClasses],hanziRepeatCount:task.hanziRepeatCount,completedClasses:[],incorrectClasses:[],incorrectAudioClasses:[],progress:0,attempts:0,errorCount:0,itemErrorCounts:{},imageItemErrorCounts:{},audioItemErrorCounts:{},status:"inProgress",taskMode:"hanzi",startedAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+    resultRef=await db.collection("taskResults").add({taskId,teacherId:task.teacherId||"",studentUid:currentUser.uid,studentName:"學生 "+selectedStudentNumber,studentCode:selectedStudentNumber,projectType:"hanzi",targetClasses:[...task.targetClasses],hanziRepeatCount:task.hanziRepeatCount,completedClasses:[],incorrectClasses:[],incorrectAudioClasses:[],progress:0,attempts:0,errorCount:0,itemErrorCounts:{},imageItemErrorCounts:{},audioItemErrorCounts:{},status:"inProgress",taskMode:task.taskMode||"hanzi",startedAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
     stopHanziSpeechRecognition(hanziSpeechRecognition,true);
     studentPageMarkedLeft=false;
     currentIndex=0;completed=[];attempts=0;totalErrorCount=0;itemErrorCounts={};imageItemErrorCounts={};audioItemErrorCounts={};finished=false;paused=false;pageAutoPaused=false;localIncorrectClasses=[];localIncorrectAudioClasses=[];consecutiveWrongAttempts=0;
     $("speakHanziBtn").disabled=false;
     $("loadCard").classList.add("hidden");$("joinCard").classList.add("hidden");$("hanziTaskCard").classList.remove("hidden");$("hanziPicker").classList.add("hidden");$("hanziTestPanel").classList.remove("hidden");
     $("hanziCopyrightNotice").classList.add("hidden");
-    $("hanziTaskTitle").textContent=task.title||"國字測驗";$("hanziPracticeIntro").textContent="學生編號 "+selectedStudentNumber;renderHanziQuestion();
-  }catch(e){setStatus("joinStatus","開始國字測驗失敗：\n"+(e.message||e),"error");$("startBtn").disabled=false}
+    $("hanziTaskTitle").textContent=task.title||(isSpeakingMode()?"口語練習模式(說)":"文字練習模式(寫)");$("hanziPracticeIntro").textContent="學生編號 "+selectedStudentNumber;renderHanziQuestion();
+  }catch(e){setStatus("joinStatus",(isSpeakingMode()?"開始口語練習失敗：\n":"開始文字練習失敗：\n")+(e.message||e),"error");$("startBtn").disabled=false}
 }
 
 async function startTask(){
@@ -2372,7 +2388,7 @@ async function startClickMode(){
       updatedAt:firebase.firestore.FieldValue.serverTimestamp()
     });
     clickSequence=buildClickSequence();clickTrialIndex=0;clickRecords=[];finished=false;paused=false;
-    $("clickTaskTitle").textContent=task.title||"隨機點選測驗";
+    $("clickTaskTitle").textContent=task.title||"點選練習模式(聽)";
     $("clickStudentNumber").textContent="學生編號 "+selectedStudentNumber;
     updateClickProgress();
     $("loadCard").classList.add("hidden");
