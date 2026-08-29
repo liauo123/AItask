@@ -437,6 +437,13 @@ body{width:100%;align-items:flex-start}
 .header h1{font-size:clamp(1.35rem,3.8vw,2rem)}
 .card{width:100%;min-width:0;padding:clamp(10px,2.5vw,20px);border-radius:clamp(14px,2.5vw,22px)}
 img,video,canvas{max-width:100%}
+/* 使用瀏覽器原生高品質插值放大縮圖，不增加下載量或額外運算流程 */
+.target-thumbnail,
+.click-prompt img,
+.click-target img{
+  image-rendering:auto;
+  image-rendering:-webkit-optimize-contrast;
+}
 button,input{max-width:100%}
 .task-title,.meta,.status,.item,.game-note,.hanzi-note,.hanzi-copyright{overflow-wrap:anywhere}
 .row{grid-template-columns:repeat(auto-fit,minmax(140px,1fr));align-items:stretch}
