@@ -91,6 +91,10 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none}
 .speakingMode .rangeSetting output{background:#dbeafe;color:#1d4ed8}
 .speakingMode .rangeSetting input[type="range"]{accent-color:#2563eb}
 .speakingMode .status{border:1px solid #bfdbfe;background:#eff6ff;color:#1d4ed8}
+.speakingTitleRow{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.speakingTitleRow h2{margin:0}
+.relaxedSpeechSetting{display:flex;align-items:center;justify-content:flex-end;gap:7px;color:#1d4ed8;font-size:13px;font-weight:900;line-height:1.45;cursor:pointer;text-align:right}
+.relaxedSpeechSetting input{width:auto;margin:0;accent-color:#2563eb;flex:0 0 auto}
 .removedMode{display:none!important}
 .modeSettings{display:grid;gap:8px;margin:11px 0;padding:11px 12px;border:1px solid rgba(148,163,184,.45);border-radius:11px;background:rgba(255,255,255,.72)}
 .modeSetting{display:flex;align-items:flex-start;gap:8px;color:var(--ink);font-size:13px;font-weight:850;line-height:1.55;cursor:pointer}.modeSetting input{width:auto;margin:3px 0 0;accent-color:currentColor;flex:0 0 auto}
@@ -178,7 +182,10 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none}
       </section>
 
       <section id="speakingModeCard" class="card modeCard speakingMode hidden">
-        <h2>口語模式(說)</h2>
+        <div class="speakingTitleRow">
+          <h2>口語模式(說)</h2>
+          <label class="relaxedSpeechSetting"><input id="relaxedSpeechRecognition" type="checkbox">放寬語音辨識標準</label>
+        </div>
         <div class="clickHint">每一個勾選的文字項目會成為一題完整語音辨識。</div>
         <input id="speakingTaskTitle" placeholder="口語模式(說)名稱">
         <input id="speakingSpeechRecognition" type="checkbox" class="hidden" checked aria-hidden="true">
@@ -333,6 +340,7 @@ function saveTeacherDraft(){
     hanziRepeatCount:1,
     speakingTaskTitle:$("speakingTaskTitle").value,
     speakingRepeatCount:Number($("speakingRepeatCount").value||1),
+    relaxedSpeechRecognition:$("relaxedSpeechRecognition").checked,
     readingTitle:$("readingTitle").value,
     readingDescriptionPrompt:$("readingDescriptionPrompt").checked,
     readingThumbnailHint:$("readingThumbnailHint").checked,
@@ -395,6 +403,7 @@ function restoreTeacherDraftBase(){
   $("speakingTaskTitle").value=String(draft.speakingTaskTitle||"");
   $("speakingSpeechRecognition").checked=true;
   $("speakingRepeatCount").value=String(Math.min(5,Math.max(1,Number(draft.speakingRepeatCount||1))));
+  $("relaxedSpeechRecognition").checked=!!draft.relaxedSpeechRecognition;
   updateSpeakingRepeatLabel();
   $("readingTitle").value=String(draft.readingTitle||"");
   $("readingDescriptionPrompt").checked=true;
@@ -573,6 +582,7 @@ async function restoreTaskFromTaskList(taskId){
       ? task.targetClasses.join("\n")
       : "";
     syncRecognitionEngineUI();
+    $("relaxedSpeechRecognition").checked=!!task.relaxedSpeechRecognition;
     if(taskMode==="teaching")$("teachingTitle").value=String(task.title||"");
     if(taskMode==="evaluation")$("taskTitle").value=String(task.title||"");
     if(taskMode==="advanced")$("advancedTitle").value=String(task.title||"");
@@ -875,16 +885,19 @@ function getAudioTargets(mode,selectedTargets){
   }).map(item=>item.dataset.label);
 }
 function getRecognitionTaskFields(){
+  const relaxedSpeechRecognition=!!$("relaxedSpeechRecognition").checked;
   if(getSelectedRecognitionEngine()==="ocr"){
     return {
       recognitionEngine:"ocr",
       ocrLanguages:["chi_tra","eng"],
       ocrMatchMode:"contains",
+      relaxedSpeechRecognition,
       threshold:0.50
     };
   }
   return {
     recognitionEngine:"teachable-machine",
+    relaxedSpeechRecognition,
     threshold:0.85
   };
 }
@@ -1226,6 +1239,7 @@ async function createSpeakingModeQR(){
       hanziText:hanziTexts.join("\n"),hanziTexts,hanziQuestionSequence:questionSequence,
       hanziWritingEnabled:false,hanziSpeechEnabled:true,hanziRepeatCount:repeatCount,
       speechRecognitionMode:"browser",speechRecognitionLanguage:"zh-TW",
+      relaxedSpeechRecognition:!!$("relaxedSpeechRecognition").checked,
       orderMode:"fixed",taskMode:"speaking",maxPlayers:15,status:"active",
       version:"3.7-speaking-mode",createdAt:firebase.firestore.FieldValue.serverTimestamp()
     });
@@ -1326,6 +1340,7 @@ function studentURL(id){const base=new URL("student.html",location.href).toStrin
 ["modelURL","ocrKeywords","teachingTitle","taskTitle","advancedTitle","gameTitle","clickTitle","hanziTaskTitle","speakingTaskTitle","readingTitle"].forEach(id=>{
   $(id).addEventListener("input",scheduleTeacherDraftSave);
 });
+$("relaxedSpeechRecognition").addEventListener("change",scheduleTeacherDraftSave);
 $("recognitionEngine").addEventListener("change",()=>{
   model=null;modelURL="";labels=[];classThumbnails={};
   $("classes").innerHTML="";

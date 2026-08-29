@@ -179,6 +179,9 @@ function recognitionEngineName(engine){
   if(engine==="coco-ssd")return "COCO-SSD 開放辨識";
   return "Teachable Machine 自訂辨識";
 }
+function speechRecognitionStandardInfo(task){
+  return `<div class="meta">語音辨識標準：${task&&task.relaxedSpeechRecognition?"放寬（中英文近似子音可通過）":"一般"}</div>`;
+}
 
 function replaceResultCacheForTasks(taskIds,docs){
   taskIds.forEach(taskId=>resultDocsByTask.delete(taskId));
@@ -439,6 +442,7 @@ async function render(docs){
     const audioInfo=audioItems.length
       ? `<div class="meta">瀏覽器語音辨識（zh-TW）：${audioItems.map(esc).join("、")}</div>`
       : "";
+    const speechStandardInfo=audioItems.length?speechRecognitionStandardInfo(t):"";
     const promptInfo=t.promptMode==="description"
       ? '<div class="meta">出題方式：說明文字出題</div>'
       : "";
@@ -455,6 +459,7 @@ async function render(docs){
           ${promptInfo}
           <div class="meta">尋找順序：${(t.targetClasses||[]).map(esc).join(" → ")}</div>
           ${audioInfo}
+          ${speechStandardInfo}
           <span class="gameState" id="gameState_${doc.id}">${stateText}</span>
         </div>
       </div>
@@ -538,6 +543,7 @@ async function render(docs){
     const audioInfo=audioItems.length
       ? `<div class="meta">瀏覽器語音辨識（zh-TW）：${audioItems.map(esc).join("、")}</div>`
       : "";
+    const speechStandardInfo=audioItems.length?speechRecognitionStandardInfo(t):"";
 
     const isReading=t.taskMode==="reading";
     return `<div class="task ${isAdvanced?"advancedTask":isReading?"readingTask":"evaluationTask"}">
@@ -552,6 +558,7 @@ async function render(docs){
           ${workflowInfo}
           <div class="meta">物品：${(t.targetClasses||[]).map(esc).join(" → ")}</div>
           ${audioInfo}
+          ${speechStandardInfo}
         </div>
       </div>
       <div class="row" style="margin-top:12px">
@@ -619,9 +626,10 @@ async function render(docs){
     const resultSection=resultError?`<div class="status err">${esc(resultError)}</div>`:`<div style="margin-top:12px"><b>學生完成度（${resultDocs.length} 人）</b><div class="rr"><b>學生</b><b>進度</b><b>狀態</b><b>辨識錯誤</b></div>${rows||'<div class="small" style="padding:10px">尚無學生紀錄</div>'}</div>`;
     const isSpeaking=t.taskMode==="speaking"||!!t.hanziSpeechEnabled;
     const settings=isSpeaking?`逐項完整文字語音辨識｜每題 ${Math.min(5,Math.max(1,Number(t.hanziRepeatCount||1)))} 次`:"中英文書寫練習連結";
+    const speechStandardInfo=isSpeaking?speechRecognitionStandardInfo(t):"";
     const practiceText=Array.isArray(t.hanziTexts)&&t.hanziTexts.length?t.hanziTexts.join("、"):String(t.hanziText||"").trim()||(t.targetClasses||[]).join("");
     const modeName=isSpeaking?"口語模式(說)":"書寫模式(寫)";
-    return `<div class="task ${isSpeaking?"speakingTask":"hanziTask"}"><div class="top"><div><span class="modeBadge">${modeName}</span><div class="titleLine"><div class="title">${esc(t.title||modeName)}</div><button class="s restoreTeacherBtn" type="button" onclick="restoreTeacherPlatform('${doc.id}')">回復教師平台</button></div><div class="meta">練習文字：${esc(practiceText)}</div><div class="meta">練習方式：${settings}</div></div></div><div class="row" style="margin-top:12px"><button class="s" onclick="showQR('${doc.id}','${esc(t.title||modeName)}')">重新產生 QR</button><button class="s" onclick="exportTaskCSV('${doc.id}')">匯出結果 CSV</button><button class="d" onclick="delTask('${doc.id}')">完整刪除</button></div>${resultSection}</div>`;
+    return `<div class="task ${isSpeaking?"speakingTask":"hanziTask"}"><div class="top"><div><span class="modeBadge">${modeName}</span><div class="titleLine"><div class="title">${esc(t.title||modeName)}</div><button class="s restoreTeacherBtn" type="button" onclick="restoreTeacherPlatform('${doc.id}')">回復教師平台</button></div><div class="meta">練習文字：${esc(practiceText)}</div><div class="meta">練習方式：${settings}</div>${speechStandardInfo}</div></div><div class="row" style="margin-top:12px"><button class="s" onclick="showQR('${doc.id}','${esc(t.title||modeName)}')">重新產生 QR</button><button class="s" onclick="exportTaskCSV('${doc.id}')">匯出結果 CSV</button><button class="d" onclick="delTask('${doc.id}')">完整刪除</button></div>${resultSection}</div>`;
   };
 
   const sections=[];

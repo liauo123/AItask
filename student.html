@@ -3405,22 +3405,49 @@ function getEnglishPhoneticTokens(text){
   return words.map(englishPhoneticKey).filter(Boolean);
 }
 
-function normalizeMandarinSpeechToken(token){
-  return normalizeSpeechText(token)
-    .replace(/[23]$/,"23")
-    .replace(/^zh/,"z")
-    .replace(/^ch/,"c")
-    .replace(/^sh/,"s")
-    .replace(/^r/,"l");
+function relaxedEnglishConsonantKey(word){
+  let value=normalizeEnglishWord(word);
+  if(!value)return "";
+  value=value
+    .replace(/^(?:kn|gn|pn)/,"n")
+    .replace(/^wr/,"r")
+    .replace(/^wh/,"w")
+    .replace(/^(?:hour|honest|honor|heir)/,match=>match.slice(1))
+    .replace(/ph/g,"f")
+    .replace(/ght/g,"t")
+    .replace(/gh/g,"")
+    .replace(/ck/g,"k")
+    .replace(/mb$/,"m")
+    .replace(/th/g,"t")
+    .replace(/(?:ch|sh)/g,"s")
+    .replace(/ng/g,"n");
+  const groups={b:"B",p:"B",f:"B",v:"B",d:"D",t:"D",c:"K",g:"K",j:"K",k:"K",q:"K",s:"K",x:"K",z:"K",l:"L",r:"L",m:"N",n:"N",w:"W",y:"W",h:"H"};
+  const consonants=[...value.replace(/[aeiou]/g,"")].map(char=>groups[char]||char);
+  return consonants.filter((key,index)=>key&&key!==consonants[index-1]).join("")||value;
 }
 
-function getPhoneticTokens(text){
+function getRelaxedEnglishConsonantTokens(text){
+  const words=String(text||"").normalize("NFKC").toLowerCase().match(/[a-z]+(?:'[a-z]+)?/g)||[];
+  return words.map(relaxedEnglishConsonantKey).filter(Boolean);
+}
+
+function normalizeMandarinSpeechToken(token,relaxed=false){
+  const value=normalizeSpeechText(token).replace(/[23]$/,"23");
+  if(!relaxed)return value;
+  const match=value.match(/^(zh|ch|sh|[bpmfdtnlgkhjqxrzcswy])/);
+  if(!match)return value;
+  const initial=match[1];
+  const groups={b:"b",p:"b",d:"d",t:"d",g:"g",k:"g",zh:"z",z:"z",j:"z",ch:"c",c:"c",q:"c",sh:"s",s:"s",x:"s",r:"l",l:"l",n:"l",f:"f",h:"f"};
+  return (groups[initial]||initial)+value.slice(initial.length);
+}
+
+function getPhoneticTokens(text,relaxed=false){
   if(!window.pinyinPro||typeof window.pinyinPro.pinyin!=="function")return [];
   try{
     return window.pinyinPro.pinyin(String(text||""),{
       toneType:"num",
       type:"array"
-    }).map(normalizeMandarinSpeechToken).filter(Boolean);
+    }).map(token=>normalizeMandarinSpeechToken(token,relaxed)).filter(Boolean);
   }catch(e){
     console.warn("拼音轉換失敗",e);
     return [];
@@ -3443,11 +3470,18 @@ function speechMatchesTarget(spoken,target){
   if(isEnglishSpeechTarget(target)){
     const spokenPhonetics=getEnglishPhoneticTokens(spoken);
     const targetPhonetics=getEnglishPhoneticTokens(target);
-    return containsTokenSequence(spokenPhonetics,targetPhonetics);
+    if(containsTokenSequence(spokenPhonetics,targetPhonetics))return true;
+    if(!task?.relaxedSpeechRecognition)return false;
+    return containsTokenSequence(
+      getRelaxedEnglishConsonantTokens(spoken),
+      getRelaxedEnglishConsonantTokens(target)
+    );
   }
   const spokenPhonetics=getPhoneticTokens(spoken);
   const targetPhonetics=getPhoneticTokens(target);
-  return containsTokenSequence(spokenPhonetics,targetPhonetics);
+  if(containsTokenSequence(spokenPhonetics,targetPhonetics))return true;
+  if(!task?.relaxedSpeechRecognition)return false;
+  return containsTokenSequence(getPhoneticTokens(spoken,true),getPhoneticTokens(target,true));
 }
 
 function stopOptionalAudioRecognition(updateUI=true){
