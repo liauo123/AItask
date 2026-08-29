@@ -3405,13 +3405,22 @@ function getEnglishPhoneticTokens(text){
   return words.map(englishPhoneticKey).filter(Boolean);
 }
 
+function normalizeMandarinSpeechToken(token){
+  return normalizeSpeechText(token)
+    .replace(/[23]$/,"23")
+    .replace(/^zh/,"z")
+    .replace(/^ch/,"c")
+    .replace(/^sh/,"s")
+    .replace(/^r/,"l");
+}
+
 function getPhoneticTokens(text){
   if(!window.pinyinPro||typeof window.pinyinPro.pinyin!=="function")return [];
   try{
     return window.pinyinPro.pinyin(String(text||""),{
       toneType:"num",
       type:"array"
-    }).map(token=>normalizeSpeechText(token).replace(/[23]$/,"23")).filter(Boolean);
+    }).map(normalizeMandarinSpeechToken).filter(Boolean);
   }catch(e){
     console.warn("拼音轉換失敗",e);
     return [];
