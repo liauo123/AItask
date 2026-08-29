@@ -573,7 +573,7 @@ html,body{
     </div>
     <div id="clickPrompt" class="click-prompt hidden">
       <span id="clickPromptInstruction">請點選這個縮圖</span>
-      <img id="clickPromptImage" alt="需要點選的物品縮圖" decoding="async">
+      <img id="clickPromptImage" alt="需要點選的文字縮圖" decoding="async">
       <span id="clickPromptText" class="click-prompt-text hidden"></span>
     </div>
     <div id="clickStage" class="click-stage">
@@ -1614,7 +1614,7 @@ async function loadTask(){
     $("taskMeta").textContent=isHanziMode()
       ? `${isSpeakingMode()?"口語模式(說)":"書寫模式(寫)"}｜${task.hanziSpeechEnabled?`逐項完整文字語音辨識｜每題 ${task.hanziRepeatCount} 次`:"開啟中英文書寫練習"}`
       : isClickMode()
-      ? `點選模式(聽)｜同時 ${task.clickSimultaneousCount} 種｜每個物品 ${task.clickRepeatCount} 次｜每次最多 ${task.clickDisplaySeconds} 秒`
+      ? `點選模式(聽)｜同時 ${task.clickSimultaneousCount} 個文字項目｜每個文字 ${task.clickRepeatCount} 次｜每次最多 ${task.clickDisplaySeconds} 秒`
       : task.taskMode==="teaching"
       ? `專案類型：${typeName}｜教學模式：拍照後顯示名稱與說明`
       : task.taskMode==="advanced"
@@ -2310,7 +2310,7 @@ async function finishClickRound(timedOut=false,speechFinished=null){
     await finishClickMode();
     return;
   }
-  $("clickWaiting").textContent=timedOut?"時間到，準備下一個物品…":"很好！準備下一個物品…";
+  $("clickWaiting").textContent=timedOut?"時間到，準備下一個文字…":"很好！準備下一個文字…";
   $("clickWaiting").classList.remove("hidden");
   clickNextTimer=setTimeout(showNextClickTrial,timedOut?850:300);
 }

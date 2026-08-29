@@ -587,8 +587,8 @@ async function render(docs){
           <div class="title">${esc(t.title||"未命名點選模式(聽)")}</div>
           <button class="s restoreTeacherBtn" type="button" onclick="restoreTeacherPlatform('${doc.id}')">回復教師平台</button>
         </div>
-        <div class="meta">物品：${(t.targetClasses||[]).map(esc).join("、")}</div>
-        <div class="meta">每個物品出現 ${Number(t.clickRepeatCount||3)} 次｜每次最多 ${Number(t.clickDisplaySeconds||5)} 秒</div>
+        <div class="meta">文字：${(t.targetClasses||[]).map(esc).join("、")}</div>
+        <div class="meta">每個文字出現 ${Number(t.clickRepeatCount||3)} 次｜每次最多 ${Number(t.clickDisplaySeconds||5)} 秒</div>
       </div></div>
       <div class="row" style="margin-top:12px">
         <button class="s" onclick="showQR('${doc.id}','${esc(t.title||"點選模式(聽)")}')">重新產生 QR</button>
