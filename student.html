@@ -3442,6 +3442,27 @@ function getRelaxedEnglishConsonantTokens(text){
   return words.map(relaxedEnglishConsonantKey).filter(Boolean);
 }
 
+function englishVowelSoundKey(word){
+  let value=normalizeEnglishWord(word).replace(/y$/,"i");
+  if(!value)return "NONE";
+  if(!/[aeiou]/.test(value)&&value.includes("y"))value=value.replace(/y/g,"i");
+  value=value
+    .replace(/igh/g,"I")
+    .replace(/(?:ee|ea|ie)/g,"I")
+    .replace(/(?:ai|ay|ei|ey)/g,"A")
+    .replace(/(?:oa|ow|oe)/g,"O")
+    .replace(/(?:oo|ou|ue|ew)/g,"U")
+    .replace(/(?:oi|oy)/g,"OI")
+    .replace(/(?:au|aw)/g,"AU");
+  const vowels=[...value].filter(char=>/[AEIOUaeiou]/.test(char)).map(char=>char.toUpperCase());
+  return vowels.join("")||`NO_VOWEL:${value}`;
+}
+
+function getEnglishVowelTokens(text){
+  const words=String(text||"").normalize("NFKC").toLowerCase().match(/[a-z]+(?:'[a-z]+)?/g)||[];
+  return words.map(englishVowelSoundKey).filter(Boolean);
+}
+
 function approximateEnglishConsonantKey(word){
   const key=relaxedEnglishConsonantKey(word);
   if(!key||key==="∅")return key;
@@ -3471,6 +3492,29 @@ function mandarinConsonantKey(token){
   const value=normalizeSpeechText(token).replace(/\d+$/g,"");
   const match=value.match(/^(zh|ch|sh|[bpmfdtnlgkhjqxrzcs])/);
   return match?match[1]:"∅";
+}
+
+function mandarinVowelKey(token){
+  const value=normalizeSpeechText(token).replace(/\d+$/g,"").replace(/ü/g,"v");
+  const initial=value.match(/^(zh|ch|sh|[bpmfdtnlgkhjqxrzcs])/);
+  const initialText=initial?initial[1]:"";
+  let finalPart="";
+  if(initialText){
+    finalPart=value.slice(initialText.length);
+    if(/^[jqx]$/.test(initialText)&&finalPart.startsWith("u"))finalPart="v"+finalPart.slice(1);
+  }else if(value.startsWith("y")){
+    const yMap={yi:"i",ya:"ia",yo:"io",ye:"ie",yao:"iao",you:"iou",yan:"ian",yin:"in",yang:"iang",ying:"ing",yong:"iong",yu:"v",yue:"ve",yuan:"van",yun:"vn"};
+    finalPart=yMap[value]||("i"+value.slice(1));
+  }else if(value.startsWith("w")){
+    const wMap={wu:"u",wa:"ua",wo:"uo",wai:"uai",wei:"uei",wan:"uan",wen:"uen",wang:"uang",weng:"ueng"};
+    finalPart=wMap[value]||("u"+value.slice(1));
+  }else{
+    finalPart=value;
+  }
+  if(finalPart==="iu")finalPart="iou";
+  else if(finalPart==="ui")finalPart="uei";
+  else if(finalPart==="un")finalPart="uen";
+  return finalPart||"NONE";
 }
 
 function approximateMandarinConsonantKey(token){
@@ -3516,6 +3560,19 @@ function getMandarinConsonantTokens(text){
   }
 }
 
+function getMandarinVowelTokens(text){
+  if(!window.pinyinPro||typeof window.pinyinPro.pinyin!=="function")return [];
+  try{
+    return window.pinyinPro.pinyin(String(text||""),{
+      toneType:"num",
+      type:"array"
+    }).map(mandarinVowelKey).filter(Boolean);
+  }catch(e){
+    console.warn("中文母音轉換失敗",e);
+    return [];
+  }
+}
+
 function getApproximateMandarinSoundTokens(text){
   if(!window.pinyinPro||typeof window.pinyinPro.pinyin!=="function")return [];
   try{
@@ -3551,6 +3608,10 @@ function speechMatchesTarget(spoken,target){
       getRelaxedEnglishConsonantTokens(spoken),
       getRelaxedEnglishConsonantTokens(target)
     ))return true;
+    if(containsTokenSequence(
+      getEnglishVowelTokens(spoken),
+      getEnglishVowelTokens(target)
+    ))return true;
     return containsTokenSequence(
       getApproximateEnglishSoundTokens(spoken),
       getApproximateEnglishSoundTokens(target)
@@ -3561,6 +3622,7 @@ function speechMatchesTarget(spoken,target){
   if(containsTokenSequence(spokenPhonetics,targetPhonetics))return true;
   if(!task?.relaxedSpeechRecognition)return false;
   if(containsTokenSequence(getMandarinConsonantTokens(spoken),getMandarinConsonantTokens(target)))return true;
+  if(containsTokenSequence(getMandarinVowelTokens(spoken),getMandarinVowelTokens(target)))return true;
   return containsTokenSequence(
     getApproximateMandarinSoundTokens(spoken),
     getApproximateMandarinSoundTokens(target)
