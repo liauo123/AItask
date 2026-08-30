@@ -180,7 +180,7 @@ function recognitionEngineName(engine){
   return "Teachable Machine 自訂辨識";
 }
 function speechRecognitionStandardInfo(task){
-  return `<div class="meta">語音辨識標準：${task&&task.relaxedSpeechRecognition?"放寬（中英文近似子音可通過）":"一般"}</div>`;
+  return `<div class="meta">語音辨識標準：${task&&task.relaxedSpeechRecognition?"放寬（中英文相同子音可通過）":"一般"}</div>`;
 }
 
 function replaceResultCacheForTasks(taskIds,docs){
