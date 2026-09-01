@@ -194,28 +194,46 @@ function speechRecognitionStandardInfo(task){
   return `<div class="meta">語音辨識標準：${task&&task.relaxedSpeechRecognition?"放寬（母音相同即可通過，並接受相同或相近發音）":"一般"}</div>`;
 }
 
-function formatStudentInputRecords(data){
+function getFilteredStudentInputRecords(data){
   const normalizeInput=value=>String(value||"").trim().toLocaleLowerCase().replace(/[\s\u3000，。！？、,.!?;；:：'"「」『』（）()\-－—_]/g,"");
-  const formatRecords=(records,wrongItems=[])=>{
+  const filterRecords=(records,wrongItems=[])=>{
     const wrongSet=new Set((Array.isArray(wrongItems)?wrongItems:[]).filter(Boolean).map(normalizeInput));
     return (Array.isArray(records)?records:[]).map(record=>{
-    const item=record&&typeof record==="object"?record:{input:String(record||"")};
-    const correctFlag=item.correct??item.isCorrect??item.matched??item.success??item.passed;
-    if(correctFlag===true||correctFlag===1||["true","correct","passed","success","正確"].includes(String(correctFlag||"").trim().toLocaleLowerCase()))return "";
-    const input=String(item.input||"").trim();
-    if(!input)return "";
-    const target=String(item.target||"").trim();
-    if(target&&wrongSet.size&&!wrongSet.has(normalizeInput(target)))return "";
-    if(correctFlag===undefined&&target&&normalizeInput(input)===normalizeInput(target))return "";
-    return `<span>${target?`「${esc(target)}」→ `:""}${esc(input)}</span>`;
-    }).filter(Boolean).join("、");
+      const item=record&&typeof record==="object"?record:{input:String(record||"")};
+      const correctFlag=item.correct??item.isCorrect??item.matched??item.success??item.passed;
+      if(correctFlag===true||correctFlag===1||["true","correct","passed","success","正確"].includes(String(correctFlag||"").trim().toLocaleLowerCase()))return null;
+      const input=String(item.input||"").trim();
+      if(!input)return null;
+      const target=String(item.target||"").trim();
+      if(target&&wrongSet.size&&!wrongSet.has(normalizeInput(target)))return null;
+      if(correctFlag===undefined&&target&&normalizeInput(input)===normalizeInput(target))return null;
+      return {target,input};
+    }).filter(Boolean);
   };
-  const writingInputs=formatRecords(data&&data.writingInputRecords,data&&data.incorrectClasses);
-  const speechInputs=formatRecords(data&&data.speechInputRecords,data&&data.incorrectAudioClasses);
+  return {
+    writing:filterRecords(data&&data.writingInputRecords,data&&data.incorrectClasses),
+    speech:filterRecords(data&&data.speechInputRecords,data&&data.incorrectAudioClasses)
+  };
+}
+
+function formatStudentInputRecords(data){
+  const records=getFilteredStudentInputRecords(data);
+  const formatRecords=items=>items.map(item=>`<span>${item.target?`「${esc(item.target)}」→ `:""}${esc(item.input)}</span>`).join("、");
+  const writingInputs=formatRecords(records.writing);
+  const speechInputs=formatRecords(records.speech);
   return [
     writingInputs?`<div><b>書寫輸入：</b>${writingInputs}</div>`:"",
     speechInputs?`<div><b>語音輸入：</b>${speechInputs}</div>`:""
   ].filter(Boolean).join("")||"—";
+}
+
+function formatStudentInputRecordsForCSV(data){
+  const records=getFilteredStudentInputRecords(data);
+  const formatRecords=items=>items.map(item=>`${item.target?`「${item.target}」→ `:""}${item.input}`).join("、");
+  return [
+    records.writing.length?`書寫輸入：${formatRecords(records.writing)}`:"",
+    records.speech.length?`語音輸入：${formatRecords(records.speech)}`:""
+  ].filter(Boolean).join("；");
 }
 
 function replaceResultCacheForTasks(taskIds,docs){
@@ -997,7 +1015,7 @@ window.exportTaskCSV=async taskId=>{
     if(!resultDocs.length){alert("此任務目前沒有學生結果可以匯出。");return}
     const title=taskSnap?(taskSnap.data().title||"任務結果"):"任務結果";
     const sorted=[...resultDocs].sort((a,b)=>Number(a.data().studentCode||999)-Number(b.data().studentCode||999));
-    const header=["任務名稱","學生編號","學生名稱","完成進度","狀態","錯誤次數","錯誤 1～2 次","錯誤 3～4 次","錯誤 5 次以上","辨識錯誤項目","遊戲名次","點選答對次數","點選逾時次數","平均點選時間(秒)","開始時間","完成時間"];
+    const header=["任務名稱","學生編號","學生名稱","完成進度","狀態","錯誤次數","錯誤 1～2 次","錯誤 3～4 次","錯誤 5 次以上","辨識錯誤項目","學生輸入文字","遊戲名次","點選答對次數","點選逾時次數","平均點選時間(秒)","開始時間","完成時間"];
     const rows=sorted.map(doc=>{
       const data=doc.data();
       const writtenWrong=Array.isArray(data.incorrectClasses)?[...new Set(data.incorrectClasses.filter(Boolean))]:[];
@@ -1009,7 +1027,7 @@ window.exportTaskCSV=async taskId=>{
       return [
         title,data.studentCode||"",data.studentName||"",`${Number(data.progress||0)}%`,
         resultStatusText(data.status),Number(data.attempts||0),
-        csvErrorRange(data,1,2),csvErrorRange(data,3,4),csvErrorRange(data,5,Infinity),incorrect,
+        csvErrorRange(data,1,2),csvErrorRange(data,3,4),csvErrorRange(data,5,Infinity),incorrect,formatStudentInputRecordsForCSV(data),
         data.gameRank?`第 ${data.gameRank} 名`:"",Number(data.clickCorrectCount||0),Number(data.clickMissCount||0),
         Number(data.clickAverageReactionMs||0)?(Number(data.clickAverageReactionMs)/1000).toFixed(2):"",timestampText(data.startedAt),timestampText(data.completedAt)
       ].map(csvValue).join(",");
