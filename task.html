@@ -155,7 +155,7 @@ function getItemErrorGroups(data,fieldName,legacyItems=[],includeSkipped=false){
   const entries=Object.entries(counts)
     .map(([name,count])=>[String(name).trim(),Math.max(0,Number(count)||0)])
     .filter(([name])=>name);
-  const twoOnly=entries.filter(([,count])=>count===2).map(([name])=>name);
+  const twoOnly=entries.filter(([,count])=>count>=1&&count<=2).map(([name])=>name);
   const threeToFour=entries.filter(([,count])=>count>=3&&count<=4).map(([name])=>name);
   const fiveOrMore=entries.filter(([,count])=>count>=5).map(([name])=>name);
   if(includeSkipped){
@@ -165,7 +165,7 @@ function getItemErrorGroups(data,fieldName,legacyItems=[],includeSkipped=false){
   if(!entries.length&&fieldName==="itemErrorCounts"){
     const distinctLegacy=[...new Set(legacyItems.filter(Boolean).map(String))];
     const total=Math.max(0,Number(data&&data.errorCount)||0);
-    if(distinctLegacy.length===1&&total===2)twoOnly.push(distinctLegacy[0]);
+    if(distinctLegacy.length===1&&total>=1&&total<=2)twoOnly.push(distinctLegacy[0]);
     if(distinctLegacy.length===1&&total>=3&&total<=4)threeToFour.push(distinctLegacy[0]);
   }
   const fiveSet=new Set(fiveOrMore);
@@ -532,13 +532,13 @@ async function render(docs){
       const audioErrors=getItemErrorGroups(d,"audioItemErrorCounts",incorrectAudioItems);
       const legacyErrors=hasTypedCounts?{twoOnly:[],threeToFour:[],fiveOrMore:[]}:getItemErrorGroups(d,"itemErrorCounts",[...incorrectItems,...incorrectAudioItems],true);
       const incorrectText=[
-        imageErrors.twoOnly.length?`拍照辨識：<span class="lowErrorMark">⚠ 答錯 2 次：${imageErrors.twoOnly.map(esc).join("、")}</span>`:"",
+        imageErrors.twoOnly.length?`拍照辨識：<span class="lowErrorMark">⚠ 答錯 1～2 次：${imageErrors.twoOnly.map(esc).join("、")}</span>`:"",
         imageErrors.threeToFour.length?`拍照辨識：<span class="errorCountMark">⚠ 答錯 3～4 次：${imageErrors.threeToFour.map(esc).join("、")}</span>`:"",
         imageErrors.fiveOrMore.length?`拍照辨識：<span class="fiveWrongMark">⚠ 答錯 5 次以上：${imageErrors.fiveOrMore.map(esc).join("、")}</span>`:"",
-        audioErrors.twoOnly.length?`語音辨識：<span class="lowErrorMark">⚠ 答錯 2 次：${audioErrors.twoOnly.map(esc).join("、")}</span>`:"",
+        audioErrors.twoOnly.length?`語音辨識：<span class="lowErrorMark">⚠ 答錯 1～2 次：${audioErrors.twoOnly.map(esc).join("、")}</span>`:"",
         audioErrors.threeToFour.length?`語音辨識：<span class="errorCountMark">⚠ 答錯 3～4 次：${audioErrors.threeToFour.map(esc).join("、")}</span>`:"",
         audioErrors.fiveOrMore.length?`語音辨識：<span class="fiveWrongMark">⚠ 答錯 5 次以上：${audioErrors.fiveOrMore.map(esc).join("、")}</span>`:"",
-        legacyErrors.twoOnly.length?`<span class="lowErrorMark">⚠ 答錯 2 次：${legacyErrors.twoOnly.map(esc).join("、")}</span>`:"",
+        legacyErrors.twoOnly.length?`<span class="lowErrorMark">⚠ 答錯 1～2 次：${legacyErrors.twoOnly.map(esc).join("、")}</span>`:"",
         legacyErrors.threeToFour.length?`<span class="errorCountMark">⚠ 答錯 3～4 次：${legacyErrors.threeToFour.map(esc).join("、")}</span>`:"",
         legacyErrors.fiveOrMore.length?`<span class="fiveWrongMark">⚠ 答錯 5 次以上：${legacyErrors.fiveOrMore.map(esc).join("、")}</span>`:""
       ].filter(Boolean).join("<br>");
@@ -654,7 +654,7 @@ async function render(docs){
       const {twoOnly,threeToFour,fiveOrMore}=getItemErrorGroups(d,errorField,incorrect,true);
       const recognitionLabel=isSpeaking?"語音辨識":"書寫辨識";
       const errors=[
-        twoOnly.length?`${recognitionLabel}：<span class="lowErrorMark">⚠ 答錯 2 次：${twoOnly.map(esc).join("、")}</span>`:"",
+        twoOnly.length?`${recognitionLabel}：<span class="lowErrorMark">⚠ 答錯 1～2 次：${twoOnly.map(esc).join("、")}</span>`:"",
         threeToFour.length?`${recognitionLabel}：<span class="errorCountMark">⚠ 答錯 3～4 次：${threeToFour.map(esc).join("、")}</span>`:"",
         fiveOrMore.length?`${recognitionLabel}：<span class="fiveWrongMark">⚠ 答錯 5 次以上：${fiveOrMore.map(esc).join("、")}</span>`:""
       ].filter(Boolean).join("<br>");
