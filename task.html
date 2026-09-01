@@ -188,6 +188,7 @@ function speechRecognitionStandardInfo(task){
 function formatStudentInputRecords(data){
   const formatRecords=records=>(Array.isArray(records)?records:[]).map(record=>{
     const item=record&&typeof record==="object"?record:{input:String(record||"")};
+    if(item.correct===true)return "";
     const input=String(item.input||"").trim();
     if(!input)return "";
     const target=String(item.target||"").trim();
