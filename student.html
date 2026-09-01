@@ -32,9 +32,9 @@
 }
 *{box-sizing:border-box}
 html,body{margin:0;min-height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC","Microsoft JhengHei",sans-serif;color:var(--text);background:var(--bg)}
-body{min-height:100dvh;display:flex;justify-content:center}
+body{min-height:100vh;min-height:100dvh;display:flex;justify-content:center}
 button,input{font:inherit}
-.app{width:min(100%,760px);min-height:100dvh;padding:max(16px,env(safe-area-inset-top)) 16px max(22px,env(safe-area-inset-bottom))}
+.app{width:min(100%,760px);min-height:100vh;min-height:100dvh;padding:max(16px,env(safe-area-inset-top)) 16px max(22px,env(safe-area-inset-bottom))}
 .header{background:linear-gradient(135deg,#2563eb,#4f46e5);color:#fff;border-radius:var(--radius);padding:20px;box-shadow:0 12px 28px rgba(37,99,235,.22);margin-bottom:14px}
 .header h1{margin:0 0 8px;font-size:clamp(1.4rem,5vw,2rem)}
 .header p{margin:0;line-height:1.6;opacity:.95}
@@ -187,7 +187,7 @@ body[data-mode-theme="reading"] #advancedPromptCard .target-question-row{flex-di
 .click-prompt{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;margin:0 auto 10px;padding:9px 16px;width:max-content;max-width:100%;border:2px solid #f59e0b;border-radius:16px;background:#fff;color:#92400e;font-weight:900;text-align:center;box-shadow:0 6px 18px rgba(146,64,14,.14)}
 .click-prompt img{width:clamp(76px,19vw,112px);height:clamp(76px,19vw,112px);object-fit:cover;border-radius:13px}
 .click-prompt-text{font-size:clamp(25px,7vw,38px);font-weight:1000;line-height:1.25;overflow-wrap:anywhere}
-.click-stage{position:relative;width:100%;height:clamp(420px,68svh,720px);overflow:hidden;border-radius:18px;background:radial-gradient(circle at top,#fffbeb,#fde68a);border:2px solid #f59e0b;touch-action:manipulation}
+.click-stage{position:relative;width:100%;height:clamp(420px,68vh,720px);height:clamp(420px,68svh,720px);overflow:hidden;border-radius:18px;background:radial-gradient(circle at top,#fffbeb,#fde68a);border:2px solid #f59e0b;touch-action:manipulation}
 .click-target{position:absolute;width:clamp(118px,31vw,176px);min-height:0;padding:10px;border:3px solid #fff;border-radius:20px;background:#fff;color:#92400e;box-shadow:0 12px 30px rgba(146,64,14,.25);display:flex;flex-direction:column;align-items:center;gap:7px;transform:scale(1);animation:clickTargetPop .22s ease;user-select:none;-webkit-user-select:none}
 .click-target img{width:clamp(88px,24vw,138px);height:clamp(88px,24vw,138px);object-fit:cover;border-radius:14px}.click-target span{font-size:clamp(18px,5vw,25px);font-weight:1000;line-height:1.2;text-align:center}.click-target:active{transform:scale(.94)}
 .click-waiting{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:#92400e;font-size:22px;font-weight:900;padding:28px}.click-countdown{position:absolute;left:12px;right:12px;bottom:10px;height:9px;border-radius:999px;background:rgba(255,255,255,.75);overflow:hidden}.click-countdown>div{height:100%;width:100%;background:#f97316;transform-origin:left center}
@@ -289,7 +289,9 @@ html,body{
 .stage,
 .teaching-camera-card .stage{
   aspect-ratio:auto;
+  height:clamp(300px,58vh,620px);
   height:clamp(300px,58svh,620px);
+  max-height:calc(100vh - 250px);
   max-height:calc(100svh - 250px);
 }
 #imageVideo,
@@ -321,7 +323,9 @@ html,body{
   .card{padding:14px;margin-top:10px}
   .stage,
   .teaching-camera-card .stage{
+    height:clamp(360px,60vh,650px);
     height:clamp(360px,60svh,650px);
+    max-height:calc(100vh - 230px);
     max-height:calc(100svh - 230px);
   }
 }
@@ -370,7 +374,9 @@ html,body{
   }
   .stage,
   .teaching-camera-card .stage{
+    height:clamp(280px,56vh,500px);
     height:clamp(280px,56svh,500px);
+    max-height:calc(100vh - 205px);
     max-height:calc(100svh - 205px);
     border-radius:13px;
   }
@@ -417,6 +423,7 @@ html,body{
   .target strong{font-size:21px}
   .stage,
   .teaching-camera-card .stage{
+    height:calc(100vh - 145px);
     height:calc(100svh - 145px);
     min-height:210px;
     max-height:430px;
@@ -449,16 +456,16 @@ button,input{max-width:100%}
 .prediction{min-width:0}.pred-row{min-width:0}.pred-name{min-width:0}
 .click-task-meta,.progress-label,.hold-head{flex-wrap:wrap}
 .click-prompt{width:max-content;max-width:100%;padding-inline:clamp(8px,3vw,18px)}
-.click-stage{height:clamp(360px,65svh,720px);min-height:320px}
+.click-stage{height:clamp(360px,65vh,720px);height:clamp(360px,65svh,720px);min-height:320px}
 .click-target{max-width:46%;padding:clamp(7px,2vw,11px)}
 
 /* 電腦與大型平板 */
 @media(min-width:1025px){
   .card{margin-top:18px}
-  .stage,.teaching-camera-card .stage{width:min(100%,760px);height:min(68svh,720px);margin-inline:auto}
+  .stage,.teaching-camera-card .stage{width:min(100%,760px);height:min(68vh,720px);height:min(68svh,720px);margin-inline:auto}
   .audio-stage{min-height:340px}
   .number-grid{grid-template-columns:repeat(5,minmax(72px,1fr))}
-  .click-stage{height:min(70svh,760px)}
+  .click-stage{height:min(70vh,760px);height:min(70svh,760px)}
 }
 
 /* 一般平板 */
@@ -481,7 +488,7 @@ button,input{max-width:100%}
   .status{padding:10px 11px;font-size:.92rem}
   .audio-verification{padding:10px}
   .verification-state{grid-template-columns:1fr}
-  .click-stage{height:clamp(340px,62svh,560px);min-height:300px}
+  .click-stage{height:clamp(340px,62vh,560px);height:clamp(340px,62svh,560px);min-height:300px}
   .click-target{width:clamp(105px,36vw,150px);max-width:47%;padding:7px}
   .click-target img{width:clamp(76px,26vw,112px);height:clamp(76px,26vw,112px)}
   .click-target span{font-size:clamp(16px,4.8vw,21px)}
@@ -497,7 +504,7 @@ button,input{max-width:100%}
   #completeActions{grid-template-columns:1fr}
   .number-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
   .round-action-btn,.recognition-actions .round-action-btn{width:58px;height:58px;min-height:58px;flex-basis:58px;font-size:27px}
-  .click-stage{height:clamp(320px,60svh,500px);min-height:280px}
+  .click-stage{height:clamp(320px,60vh,500px);height:clamp(320px,60svh,500px);min-height:280px}
   .click-target{width:clamp(96px,40vw,128px);max-width:46%}
 }
 
@@ -2031,7 +2038,7 @@ function stopHanziSpeechRecognition(recognitionOverride=null,enableButton=true){
 
 function recognizeHanziSpeech(){
   const SpeechRecognition=getBrowserSpeechRecognitionConstructor();
-  if(!SpeechRecognition)return setStatus("hanziStatus","此瀏覽器不支援語音辨識，請改用 Chrome 或 Safari。","error");
+  if(!SpeechRecognition)return setStatus("hanziStatus","此瀏覽器不支援語音辨識，請改用最新版 Chrome、Edge 或 Safari。","error");
   stopPlatformSpeech();
   if(hanziSpeechRecognition)stopHanziSpeechRecognition(hanziSpeechRecognition);
   const target=task.targetClasses[currentIndex];
@@ -2772,7 +2779,7 @@ function getBrowserSpeechRecognitionConstructor(){
 function validateBrowserSpeechRecognition(){
   const required=getEffectiveAudioRequiredClasses();
   if(required.length&&!getBrowserSpeechRecognitionConstructor()){
-    throw new Error("此瀏覽器不支援語音辨識，請使用最新版 Chrome 或 Safari 開啟學生端。");
+    throw new Error("此瀏覽器不支援語音辨識，請使用最新版 Chrome、Edge 或 Safari 開啟學生端。");
   }
 }
 
@@ -2875,7 +2882,7 @@ function describeCameraError(error){
 
 async function openCompatibleCameraStream(){
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
-    throw new Error("此瀏覽器不支援相機功能，請使用最新版 Chrome 或 Safari。");
+    throw new Error("此瀏覽器不支援相機功能，請使用最新版 Chrome、Edge、Firefox 或 Safari。");
   }
   if(!window.isSecureContext&&!["localhost","127.0.0.1"].includes(location.hostname)){
     throw new Error("相機只能在 HTTPS 安全網址使用。");
@@ -3718,7 +3725,7 @@ async function startOptionalAudioRecognition(){
 
   const SpeechRecognition=getBrowserSpeechRecognitionConstructor();
   if(!SpeechRecognition){
-    setVoiceResult("此瀏覽器不支援語音辨識，請使用最新版 Chrome 或 Safari。","error");
+    setVoiceResult("此瀏覽器不支援語音辨識，請使用最新版 Chrome、Edge 或 Safari。","error");
     showCaptureFeedback("failure","不支援語音");
     playTaskErrorSound();
     return;

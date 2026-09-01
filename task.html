@@ -14,7 +14,7 @@
 :root{--b:#2563eb;--r:#dc2626;--m:#64748b;--surface:#fff;--surface-border:#dbe4ee;--teaching-bg:#eff6ff;--teaching-border:#93c5fd;--evaluation-bg:#ecfdf5;--evaluation-border:#86efac;--advanced-bg:#effcf9;--advanced-border:#5eead4;--game-bg:#faf5ff;--game-border:#c4b5fd;--click-bg:#fff8ed;--click-border:#fbbf24;--hanzi-bg:#fff1f2;--hanzi-border:#fb7185}
 *{box-sizing:border-box}
 body{margin:0;background:linear-gradient(180deg,#f6f9fd 0,#edf3f9 100%);font-family:"Noto Sans TC","Microsoft JhengHei",Arial,sans-serif;color:#172033;min-height:100vh}
-header{background:rgba(255,255,255,.96);border-bottom:1px solid #dbe5f0;box-shadow:0 4px 18px rgba(15,23,42,.07);padding:13px 20px;position:sticky;top:0;z-index:20;backdrop-filter:blur(10px)}
+header{background:rgba(255,255,255,.96);border-bottom:1px solid #dbe5f0;box-shadow:0 4px 18px rgba(15,23,42,.07);padding:13px 20px;position:sticky;top:0;z-index:20;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
 .head{max-width:1180px;margin:auto;display:flex;justify-content:space-between;align-items:center;gap:18px}
 .brand{display:flex;align-items:center;gap:12px}.brandMark{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;background:linear-gradient(135deg,#2563eb,#4f46e5);color:#fff;font-size:21px;font-weight:900;box-shadow:0 7px 18px rgba(37,99,235,.24)}
 h1{margin:0;color:#17376b;font-size:22px;letter-spacing:.04em}
@@ -147,6 +147,15 @@ const resultUnsubs=[],playerUnsubs=new Map(),gamePlayersCache=new Map();
 const gamePlayersLoaded=new Set(),gamePlayersLoading=new Map();
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+async function copyTextCompat(text){
+  if(navigator.clipboard&&typeof navigator.clipboard.writeText==="function"&&window.isSecureContext){
+    try{await navigator.clipboard.writeText(text);return true}catch(e){}
+  }
+  const area=document.createElement("textarea");
+  area.value=String(text||"");area.setAttribute("readonly","");area.style.position="fixed";area.style.opacity="0";
+  document.body.appendChild(area);area.select();area.setSelectionRange(0,area.value.length);
+  let copied=false;try{copied=document.execCommand("copy")}catch(e){}area.remove();return copied;
+}
 function getItemErrorGroups(data,fieldName,legacyItems=[],includeSkipped=false){
   const source=data&&data[fieldName];
   const counts=source&&typeof source==="object"&&!Array.isArray(source)
@@ -355,7 +364,7 @@ function restoreTeacherPlatform(id){
 }
 window.restoreTeacherPlatform=restoreTeacherPlatform;
 $("closeBtn").onclick=()=>$("qrModal").classList.add("hidden");
-$("copyBtn").onclick=()=>navigator.clipboard.writeText($("qrURL").textContent);
+$("copyBtn").onclick=async()=>{const button=$("copyBtn"),label=button.textContent;button.textContent=await copyTextCompat($("qrURL").textContent)?"已複製":"請手動複製";setTimeout(()=>button.textContent=label,1600)};
 
 function listen(){
   if(unsub)unsub();

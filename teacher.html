@@ -20,7 +20,7 @@
 }
 *{box-sizing:border-box}
 body{margin:0;background:linear-gradient(180deg,#f6f9fd 0,#edf3f9 100%);font-family:"Noto Sans TC","Microsoft JhengHei",Arial,sans-serif;color:var(--ink);min-height:100vh}
-header{background:rgba(255,255,255,.96);border-bottom:1px solid #dbe5f0;box-shadow:0 4px 18px rgba(15,23,42,.07);padding:13px 20px;position:sticky;top:0;z-index:20;backdrop-filter:blur(10px)}
+header{background:rgba(255,255,255,.96);border-bottom:1px solid #dbe5f0;box-shadow:0 4px 18px rgba(15,23,42,.07);padding:13px 20px;position:sticky;top:0;z-index:20;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
 .head{max-width:1180px;margin:auto;display:flex;justify-content:space-between;align-items:center;gap:18px}
 .brand{display:flex;align-items:center;gap:12px}
 .brandMark{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;background:linear-gradient(135deg,#2563eb,#4f46e5);color:#fff;font-size:21px;font-weight:900;box-shadow:0 7px 18px rgba(37,99,235,.24)}
@@ -95,12 +95,6 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none}
 .speakingTitleRow h2{margin:0}
 .relaxedSpeechSetting{display:flex;align-items:center;justify-content:flex-end;gap:7px;color:#1d4ed8;font-size:13px;font-weight:900;line-height:1.45;cursor:pointer;text-align:right}
 .relaxedSpeechSetting input{width:auto;margin:0;accent-color:#2563eb;flex:0 0 auto}
-.hanziPracticeSetting{color:#991b1b}
-.hanziPracticeSetting input{width:auto;margin:0;accent-color:#dc2626;flex:0 0 auto}
-.hanziMode .modeSettings{border-color:#fda4af;background:rgba(255,241,242,.78)}
-.hanziPracticeDescription{padding-left:25px;color:#7f1d1d;font-size:13px;font-weight:750;line-height:1.65}
-#createTaskCard .modeSettings{background:#dcfce7;border-color:#86efac}
-#gameModeCard .modeSettings{background:#ede9fe;border-color:#c4b5fd}
 .removedMode{display:none!important}
 .modeSettings{display:grid;gap:8px;margin:11px 0;padding:11px 12px;border:1px solid rgba(148,163,184,.45);border-radius:11px;background:rgba(255,255,255,.72)}
 .modeSetting{display:flex;align-items:flex-start;gap:8px;color:var(--ink);font-size:13px;font-weight:850;line-height:1.55;cursor:pointer}.modeSetting input{width:auto;margin:3px 0 0;accent-color:currentColor;flex:0 0 auto}
@@ -178,12 +172,8 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none}
 
       <section id="hanziModeCard" class="card modeCard hanziMode hidden">
         <h2>書寫模式(寫)</h2>
-        <div class="modeHint">學生端設備需開啟手寫輸入。</div>
+        <div class="clickHint">中文字可逐字連結教育部筆順練習，英文字母可逐字連結英文描寫練習。</div>
         <input id="hanziTaskTitle" placeholder="書寫模式(寫)名稱">
-        <div class="modeSettings">
-          <label class="modeSetting hanziPracticeSetting"><input id="hanziPracticeMode" type="checkbox">書寫練習</label>
-          <div class="hanziPracticeDescription">中文字可逐字連結教育部筆順練習，英文字母可逐字連結英文描寫練習。</div>
-        </div>
         <input id="hanziSpeechRecognition" type="checkbox" class="hidden" aria-hidden="true">
         <input id="hanziRepeatCount" type="hidden" value="1">
         <output id="hanziRepeatCountValue" class="hidden">1 次</output>
@@ -276,6 +266,15 @@ const firestorePersistenceReady=db.enablePersistence({synchronizeTabs:true}).cat
 });
 let user=null,model=null,modelURL="",labels=[],unsub=null,classThumbnails={};
 const $=id=>document.getElementById(id);const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));function status(id,msg,type=""){const e=$(id);e.textContent=msg;e.className="status "+type}
+async function copyTextCompat(text){
+  if(navigator.clipboard&&typeof navigator.clipboard.writeText==="function"&&window.isSecureContext){
+    try{await navigator.clipboard.writeText(text);return true}catch(e){}
+  }
+  const area=document.createElement("textarea");
+  area.value=String(text||"");area.setAttribute("readonly","");area.style.position="fixed";area.style.opacity="0";
+  document.body.appendChild(area);area.select();area.setSelectionRange(0,area.value.length);
+  let copied=false;try{copied=document.execCommand("copy")}catch(e){}area.remove();return copied;
+}
 const TEACHER_DRAFT_PREFIX="teacherInputDraftV1:";
 let restoringTeacherDraft=false,teacherDraftSaveTimer=null;
 let teacherDraftCacheKey="",teacherDraftCache=null,teacherDraftCacheLoaded=false;
@@ -346,7 +345,6 @@ function saveTeacherDraft(){
     gameShowNameText:$("gameShowNameText").checked,
     gameThumbnailHint:$("gameThumbnailHint").checked,
     hanziTaskTitle:$("hanziTaskTitle").value,
-    hanziPracticeMode:$("hanziPracticeMode").checked,
     hanziSpeechRecognition:false,
     hanziRepeatCount:1,
     speakingTaskTitle:$("speakingTaskTitle").value,
@@ -408,7 +406,6 @@ function restoreTeacherDraftBase(){
   $("gameShowNameText").checked=getSelectedRecognitionEngine()==="ocr"&&!!draft.gameShowNameText;
   $("gameThumbnailHint").checked=!!draft.gameThumbnailHint;
   $("hanziTaskTitle").value=String(draft.hanziTaskTitle||"");
-  $("hanziPracticeMode").checked=!!draft.hanziPracticeMode;
   $("hanziSpeechRecognition").checked=false;
   $("hanziRepeatCount").value="1";
   updateHanziRepeatLabel();
@@ -601,9 +598,6 @@ async function restoreTaskFromTaskList(taskId){
     if(taskMode==="game")$("gameTitle").value=String(task.title||"");
     if(taskMode==="hanzi"){
       $("hanziTaskTitle").value=String(task.title||"").replace(/^(?:國字|文字)練習：/,"");
-      $("hanziPracticeMode").checked=task.hanziPracticeEnabled===undefined
-        ? !task.hanziWritingEnabled
-        : !!task.hanziPracticeEnabled;
       $("hanziSpeechRecognition").checked=false;
       $("hanziRepeatCount").value="1";
       updateHanziRepeatLabel();
@@ -656,10 +650,7 @@ async function restoreTaskFromTaskList(taskId){
 
     restoringTeacherDraft=true;
     const targets=Array.isArray(task.targetClasses)?task.targetClasses.filter(Boolean):[];
-    const selectableTargets=taskMode==="hanzi"&&Array.isArray(task.hanziTexts)&&task.hanziTexts.length
-      ? task.hanziTexts.filter(Boolean)
-      : targets;
-    const targetSet=new Set(selectableTargets);
+    const targetSet=new Set(targets);
     const descriptions=task.classDescriptions&&typeof task.classDescriptions==="object"
       ? task.classDescriptions
       : {};
@@ -671,7 +662,7 @@ async function restoreTaskFromTaskList(taskId){
     const boxes=[...container.querySelectorAll(".classBox")];
     const byLabel=new Map(boxes.map(item=>[item.dataset.label,item]));
 
-    selectableTargets.forEach(label=>{
+    targets.forEach(label=>{
       const item=byLabel.get(label);
       if(item)container.appendChild(item);
     });
@@ -1181,18 +1172,17 @@ async function createHanziModeQR(){
   const selectedTexts=getSelectedClassesInCurrentOrder();
   const hanziTexts=labels.length?selectedTexts:typedTexts;
   const chars=getHanziCharacters(hanziTexts);
-  const practiceEnabled=$("hanziPracticeMode").checked;
   const speechEnabled=false;
   const hanziRepeatCount=1;
   if(!title)return status("hanziStatus","請輸入書寫模式(寫)名稱。","err");
   if(!labels.length&&!hanziTexts.length)return status("hanziStatus","請先在上方輸入文字並按下「載入文字辨識」。","err");
   if(labels.length&&!hanziTexts.length)return status("hanziStatus","請至少勾選一個要出題的文字項目。","err");
-  if(!speechEnabled&&!chars.length)return status("hanziStatus","書寫內容需包含至少一個中文字或英文字母。","err");
+  if(!speechEnabled&&!chars.length)return status("hanziStatus","書寫練習內容需包含至少一個中文字或英文字母。","err");
   if(!user)return status("hanziStatus","請先登入教師帳號。","err");
   const hanziQuestionSequence=speechEnabled
     ? hanziTexts.flatMap(text=>Array(hanziRepeatCount).fill(text))
     : [];
-  const targets=chars;
+  const targets=speechEnabled?hanziQuestionSequence:chars;
   $("createHanziBtn").disabled=true;
   status("hanziStatus","正在建立書寫模式(寫)…");
   try{
@@ -1209,8 +1199,7 @@ async function createHanziModeQR(){
       hanziText:hanziTexts.join("\n"),
       hanziTexts,
       hanziQuestionSequence,
-      hanziWritingEnabled:!practiceEnabled,
-      hanziPracticeEnabled:practiceEnabled,
+      hanziWritingEnabled:false,
       hanziSpeechEnabled:speechEnabled,
       hanziRepeatCount,
       speechRecognitionMode:"browser",
@@ -1219,12 +1208,10 @@ async function createHanziModeQR(){
       taskMode:"hanzi",
       maxPlayers:15,
       status:"active",
-      version:"3.8-hanzi-device-writing",
+      version:"3.3-hanzi-repeat-count",
       createdAt:firebase.firestore.FieldValue.serverTimestamp()
     });
-    const detail=practiceEnabled
-      ? "學生可逐字選擇並開啟中文筆順或英文字母描寫練習。"
-      : "學生選擇編號後，使用設備手寫輸入作答；系統判斷正誤並回傳任務列表。";
+    const detail="學生可逐字選擇並開啟中文筆順或英文字母描寫練習。";
     status("hanziStatus",`書寫模式(寫)建立成功！\n${detail}\nTask ID：${ref.id}`,"ok");
     showQR(ref.id,title);
   }catch(e){
@@ -1236,7 +1223,6 @@ async function createHanziModeQR(){
 
 $("createHanziBtn").onclick=createHanziModeQR;
 $("hanziRepeatCount").addEventListener("input",()=>{updateHanziRepeatLabel();scheduleTeacherDraftSave()});
-$("hanziPracticeMode").addEventListener("change",scheduleTeacherDraftSave);
 
 function updateSpeakingRepeatLabel(){
   $("speakingRepeatCountValue").textContent=$("speakingRepeatCount").value+" 次";
@@ -1358,7 +1344,7 @@ $("createReadingBtn").onclick=async()=>{
     status("readingStatus","建立問答模式(讀)失敗：\n"+(e.message||e),"err");
   }finally{$("createReadingBtn").disabled=false}
 };
-function studentURL(id){const base=new URL("student.html",location.href).toString(),u=new URL(base,location.href);u.searchParams.set("task",id);u.searchParams.set("v","3.6-github-speech-fix");return u.toString()}function showQR(id,title){const url=studentURL(id);$("qrTitle").textContent=title+"－QR Code";$("qrURL").textContent=url;$("qrCode").innerHTML="";new QRCode($("qrCode"),{text:url,width:260,height:260,correctLevel:QRCode.CorrectLevel.M});$("qrModal").classList.remove("hidden")}window.showQR=showQR;$("closeBtn").onclick=()=>$("qrModal").classList.add("hidden");$("copyBtn").onclick=()=>navigator.clipboard.writeText($("qrURL").textContent);
+function studentURL(id){const base=new URL("student.html",location.href).toString(),u=new URL(base,location.href);u.searchParams.set("task",id);u.searchParams.set("v","3.6-github-speech-fix");return u.toString()}function showQR(id,title){const url=studentURL(id);$("qrTitle").textContent=title+"－QR Code";$("qrURL").textContent=url;$("qrCode").innerHTML="";new QRCode($("qrCode"),{text:url,width:260,height:260,correctLevel:QRCode.CorrectLevel.M});$("qrModal").classList.remove("hidden")}window.showQR=showQR;$("closeBtn").onclick=()=>$("qrModal").classList.add("hidden");$("copyBtn").onclick=async()=>{const button=$("copyBtn"),label=button.textContent;button.textContent=await copyTextCompat($("qrURL").textContent)?"已複製":"請手動複製";setTimeout(()=>button.textContent=label,1600)};
 
 ["modelURL","ocrKeywords","teachingTitle","taskTitle","advancedTitle","gameTitle","clickTitle","hanziTaskTitle","speakingTaskTitle","readingTitle"].forEach(id=>{
   $(id).addEventListener("input",scheduleTeacherDraftSave);
