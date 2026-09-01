@@ -99,6 +99,8 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none}
 .hanziPracticeSetting input{width:auto;margin:0;accent-color:#dc2626;flex:0 0 auto}
 .hanziMode .modeSettings{border-color:#fda4af;background:rgba(255,241,242,.78)}
 .hanziPracticeDescription{padding-left:25px;color:#7f1d1d;font-size:13px;font-weight:750;line-height:1.65}
+#createTaskCard .modeSettings{background:#dcfce7;border-color:#86efac}
+#gameModeCard .modeSettings{background:#ede9fe;border-color:#c4b5fd}
 .removedMode{display:none!important}
 .modeSettings{display:grid;gap:8px;margin:11px 0;padding:11px 12px;border:1px solid rgba(148,163,184,.45);border-radius:11px;background:rgba(255,255,255,.72)}
 .modeSetting{display:flex;align-items:flex-start;gap:8px;color:var(--ink);font-size:13px;font-weight:850;line-height:1.55;cursor:pointer}.modeSetting input{width:auto;margin:3px 0 0;accent-color:currentColor;flex:0 0 auto}
@@ -181,6 +183,7 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none}
           <label class="modeSetting hanziPracticeSetting"><input id="hanziPracticeMode" type="checkbox">書寫練習</label>
           <div class="hanziPracticeDescription">中文字可逐字連結教育部筆順練習，英文字母可逐字連結英文描寫練習。</div>
         </div>
+        <div class="modeHint">學生端設備需開啟手寫輸入。</div>
         <input id="hanziSpeechRecognition" type="checkbox" class="hidden" aria-hidden="true">
         <input id="hanziRepeatCount" type="hidden" value="1">
         <output id="hanziRepeatCountValue" class="hidden">1 次</output>
