@@ -2041,9 +2041,9 @@ async function recognizeHanziWriting(){
   try{
     if(answer!==normalizeHanziWritingAnswer(target)){
       localIncorrectClasses.push(target);consecutiveWrongAttempts++;totalErrorCount++;addItemError(target,"image");playTaskErrorSound();showCaptureFeedback("failure","書寫答錯了");
-      if(resultRef){
-        try{
-          await resultRef.update({
+      const wrongCount=consecutiveWrongAttempts;
+      const persistError=resultRef
+        ? resultRef.update({
             attempts,
             errorCount:totalErrorCount,
             itemErrorCounts:{...itemErrorCounts},
@@ -2051,16 +2051,18 @@ async function recognizeHanziWriting(){
             audioItemErrorCounts:{...audioItemErrorCounts},
             incorrectClasses:firebase.firestore.FieldValue.arrayUnion(target),
             updatedAt:firebase.firestore.FieldValue.serverTimestamp()
-          });
-        }catch(e){console.warn("書寫錯誤紀錄失敗",e)}
-      }
-      if(consecutiveWrongAttempts>=5){
+          }).catch(e=>console.warn("書寫錯誤紀錄失敗",e))
+        : Promise.resolve();
+      if(wrongCount>=5){
         setStatus("hanziStatus","已連續答錯 5 次，即將進入下一題。","error");
+        input.blur();
+        void persistError;
         await new Promise(resolve=>setTimeout(resolve,850));
         await completeHanziCharacter(true);
         return;
       }
-      setStatus("hanziStatus",`輸入「${input.value.trim()}」，請再試一次（${consecutiveWrongAttempts}/5）。`,"error");
+      await persistError;
+      setStatus("hanziStatus",`輸入「${input.value.trim()}」，請再試一次（${wrongCount}/5）。`,"error");
       input.select();
       return;
     }
