@@ -95,6 +95,8 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none}
 .speakingTitleRow h2{margin:0}
 .relaxedSpeechSetting{display:flex;align-items:center;justify-content:flex-end;gap:7px;color:#1d4ed8;font-size:13px;font-weight:900;line-height:1.45;cursor:pointer;text-align:right}
 .relaxedSpeechSetting input{width:auto;margin:0;accent-color:#2563eb;flex:0 0 auto}
+.hanziPracticeSetting{display:flex;align-items:center;gap:8px;color:#991b1b;font-size:14px;font-weight:900;line-height:1.45;cursor:pointer;margin:2px 0 8px}
+.hanziPracticeSetting input{width:auto;margin:0;accent-color:#dc2626;flex:0 0 auto}
 .removedMode{display:none!important}
 .modeSettings{display:grid;gap:8px;margin:11px 0;padding:11px 12px;border:1px solid rgba(148,163,184,.45);border-radius:11px;background:rgba(255,255,255,.72)}
 .modeSetting{display:flex;align-items:flex-start;gap:8px;color:var(--ink);font-size:13px;font-weight:850;line-height:1.55;cursor:pointer}.modeSetting input{width:auto;margin:3px 0 0;accent-color:currentColor;flex:0 0 auto}
@@ -172,6 +174,7 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none}
 
       <section id="hanziModeCard" class="card modeCard hanziMode hidden">
         <h2>書寫模式(寫)</h2>
+        <label class="hanziPracticeSetting"><input id="hanziPracticeMode" type="checkbox">書寫練習</label>
         <div class="clickHint">中文字可逐字連結教育部筆順練習，英文字母可逐字連結英文描寫練習。</div>
         <input id="hanziTaskTitle" placeholder="書寫模式(寫)名稱">
         <input id="hanziSpeechRecognition" type="checkbox" class="hidden" aria-hidden="true">
@@ -336,6 +339,7 @@ function saveTeacherDraft(){
     gameShowNameText:$("gameShowNameText").checked,
     gameThumbnailHint:$("gameThumbnailHint").checked,
     hanziTaskTitle:$("hanziTaskTitle").value,
+    hanziPracticeMode:$("hanziPracticeMode").checked,
     hanziSpeechRecognition:false,
     hanziRepeatCount:1,
     speakingTaskTitle:$("speakingTaskTitle").value,
@@ -397,6 +401,7 @@ function restoreTeacherDraftBase(){
   $("gameShowNameText").checked=getSelectedRecognitionEngine()==="ocr"&&!!draft.gameShowNameText;
   $("gameThumbnailHint").checked=!!draft.gameThumbnailHint;
   $("hanziTaskTitle").value=String(draft.hanziTaskTitle||"");
+  $("hanziPracticeMode").checked=!!draft.hanziPracticeMode;
   $("hanziSpeechRecognition").checked=false;
   $("hanziRepeatCount").value="1";
   updateHanziRepeatLabel();
@@ -589,6 +594,9 @@ async function restoreTaskFromTaskList(taskId){
     if(taskMode==="game")$("gameTitle").value=String(task.title||"");
     if(taskMode==="hanzi"){
       $("hanziTaskTitle").value=String(task.title||"").replace(/^(?:國字|文字)練習：/,"");
+      $("hanziPracticeMode").checked=task.hanziPracticeEnabled===undefined
+        ? !task.hanziWritingEnabled
+        : !!task.hanziPracticeEnabled;
       $("hanziSpeechRecognition").checked=false;
       $("hanziRepeatCount").value="1";
       updateHanziRepeatLabel();
@@ -641,7 +649,10 @@ async function restoreTaskFromTaskList(taskId){
 
     restoringTeacherDraft=true;
     const targets=Array.isArray(task.targetClasses)?task.targetClasses.filter(Boolean):[];
-    const targetSet=new Set(targets);
+    const selectableTargets=taskMode==="hanzi"&&Array.isArray(task.hanziTexts)&&task.hanziTexts.length
+      ? task.hanziTexts.filter(Boolean)
+      : targets;
+    const targetSet=new Set(selectableTargets);
     const descriptions=task.classDescriptions&&typeof task.classDescriptions==="object"
       ? task.classDescriptions
       : {};
@@ -653,7 +664,7 @@ async function restoreTaskFromTaskList(taskId){
     const boxes=[...container.querySelectorAll(".classBox")];
     const byLabel=new Map(boxes.map(item=>[item.dataset.label,item]));
 
-    targets.forEach(label=>{
+    selectableTargets.forEach(label=>{
       const item=byLabel.get(label);
       if(item)container.appendChild(item);
     });
@@ -1163,17 +1174,18 @@ async function createHanziModeQR(){
   const selectedTexts=getSelectedClassesInCurrentOrder();
   const hanziTexts=labels.length?selectedTexts:typedTexts;
   const chars=getHanziCharacters(hanziTexts);
+  const practiceEnabled=$("hanziPracticeMode").checked;
   const speechEnabled=false;
   const hanziRepeatCount=1;
   if(!title)return status("hanziStatus","請輸入書寫模式(寫)名稱。","err");
   if(!labels.length&&!hanziTexts.length)return status("hanziStatus","請先在上方輸入文字並按下「載入文字辨識」。","err");
   if(labels.length&&!hanziTexts.length)return status("hanziStatus","請至少勾選一個要出題的文字項目。","err");
-  if(!speechEnabled&&!chars.length)return status("hanziStatus","書寫練習內容需包含至少一個中文字或英文字母。","err");
+  if(!speechEnabled&&!chars.length)return status("hanziStatus","書寫內容需包含至少一個中文字或英文字母。","err");
   if(!user)return status("hanziStatus","請先登入教師帳號。","err");
   const hanziQuestionSequence=speechEnabled
     ? hanziTexts.flatMap(text=>Array(hanziRepeatCount).fill(text))
     : [];
-  const targets=speechEnabled?hanziQuestionSequence:chars;
+  const targets=chars;
   $("createHanziBtn").disabled=true;
   status("hanziStatus","正在建立書寫模式(寫)…");
   try{
@@ -1190,7 +1202,8 @@ async function createHanziModeQR(){
       hanziText:hanziTexts.join("\n"),
       hanziTexts,
       hanziQuestionSequence,
-      hanziWritingEnabled:false,
+      hanziWritingEnabled:!practiceEnabled,
+      hanziPracticeEnabled:practiceEnabled,
       hanziSpeechEnabled:speechEnabled,
       hanziRepeatCount,
       speechRecognitionMode:"browser",
@@ -1199,10 +1212,12 @@ async function createHanziModeQR(){
       taskMode:"hanzi",
       maxPlayers:15,
       status:"active",
-      version:"3.3-hanzi-repeat-count",
+      version:"3.8-hanzi-device-writing",
       createdAt:firebase.firestore.FieldValue.serverTimestamp()
     });
-    const detail="學生可逐字選擇並開啟中文筆順或英文字母描寫練習。";
+    const detail=practiceEnabled
+      ? "學生可逐字選擇並開啟中文筆順或英文字母描寫練習。"
+      : "學生選擇編號後，使用設備手寫輸入作答；系統判斷正誤並回傳任務列表。";
     status("hanziStatus",`書寫模式(寫)建立成功！\n${detail}\nTask ID：${ref.id}`,"ok");
     showQR(ref.id,title);
   }catch(e){
@@ -1214,6 +1229,7 @@ async function createHanziModeQR(){
 
 $("createHanziBtn").onclick=createHanziModeQR;
 $("hanziRepeatCount").addEventListener("input",()=>{updateHanziRepeatLabel();scheduleTeacherDraftSave()});
+$("hanziPracticeMode").addEventListener("change",scheduleTeacherDraftSave);
 
 function updateSpeakingRepeatLabel(){
   $("speakingRepeatCountValue").textContent=$("speakingRepeatCount").value+" 次";

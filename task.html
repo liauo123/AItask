@@ -608,24 +608,28 @@ async function render(docs){
 
   const renderHanziTask=async doc=>{
     const t=doc.data();let resultDocs=[],resultError="";
+    const isSpeaking=t.taskMode==="speaking"||!!t.hanziSpeechEnabled;
+    const isPractice=!isSpeaking&&(t.hanziPracticeEnabled===undefined?!t.hanziWritingEnabled:!!t.hanziPracticeEnabled);
     try{
       resultDocs=[...getCachedTaskResultDocs(doc.id)].sort((a,b)=>Number(a.data().studentCode||999)-Number(b.data().studentCode||999));
     }catch(e){resultError=e.message||String(e)}
     const rows=resultDocs.map(r=>{
-      const d=r.data(),speech=[...new Set((d.incorrectAudioClasses||[]).filter(Boolean))];
+      const d=r.data(),incorrect=[...new Set(((isSpeaking?d.incorrectAudioClasses:d.incorrectClasses)||[]).filter(Boolean))];
       const skipped=Array.isArray(d.skippedClasses)?[...new Set(d.skippedClasses.filter(Boolean))]:[];
-      const audioField=d.audioItemErrorCounts&&typeof d.audioItemErrorCounts==="object"?"audioItemErrorCounts":"itemErrorCounts";
-      const {twoOnly,threeToFour,fiveOrMore}=getItemErrorGroups(d,audioField,speech,true);
+      const errorField=isSpeaking
+        ? (d.audioItemErrorCounts&&typeof d.audioItemErrorCounts==="object"?"audioItemErrorCounts":"itemErrorCounts")
+        : (d.imageItemErrorCounts&&typeof d.imageItemErrorCounts==="object"?"imageItemErrorCounts":"itemErrorCounts");
+      const {twoOnly,threeToFour,fiveOrMore}=getItemErrorGroups(d,errorField,incorrect,true);
+      const recognitionLabel=isSpeaking?"語音辨識":"書寫辨識";
       const errors=[
-        twoOnly.length?`語音辨識：<span class="lowErrorMark">⚠ 答錯 2 次：${twoOnly.map(esc).join("、")}</span>`:"",
-        threeToFour.length?`語音辨識：<span class="errorCountMark">⚠ 答錯 3～4 次：${threeToFour.map(esc).join("、")}</span>`:"",
-        fiveOrMore.length?`語音辨識：<span class="fiveWrongMark">⚠ 答錯 5 次以上：${fiveOrMore.map(esc).join("、")}</span>`:""
+        twoOnly.length?`${recognitionLabel}：<span class="lowErrorMark">⚠ 答錯 2 次：${twoOnly.map(esc).join("、")}</span>`:"",
+        threeToFour.length?`${recognitionLabel}：<span class="errorCountMark">⚠ 答錯 3～4 次：${threeToFour.map(esc).join("、")}</span>`:"",
+        fiveOrMore.length?`${recognitionLabel}：<span class="fiveWrongMark">⚠ 答錯 5 次以上：${fiveOrMore.map(esc).join("、")}</span>`:""
       ].filter(Boolean).join("<br>");
       return `<div class="rr${fiveOrMore.length?" hasFiveWrong":twoOnly.length||threeToFour.length?" hasAnyError":""}"><span>${esc(d.studentName||"未命名")}</span><span>${Number(d.progress||0)}%</span><span>${resultStatusText(d.status)}</span><span>${errors||"—"}</span></div>`;
     }).join("");
     const resultSection=resultError?`<div class="status err">${esc(resultError)}</div>`:`<div style="margin-top:12px"><b>學生完成度（${resultDocs.length} 人）</b><div class="rr"><b>學生</b><b>進度</b><b>狀態</b><b>辨識錯誤</b></div>${rows||'<div class="small" style="padding:10px">尚無學生紀錄</div>'}</div>`;
-    const isSpeaking=t.taskMode==="speaking"||!!t.hanziSpeechEnabled;
-    const settings=isSpeaking?`逐項完整文字語音辨識｜每題 ${Math.min(5,Math.max(1,Number(t.hanziRepeatCount||1)))} 次`:"中英文書寫練習連結";
+    const settings=isSpeaking?`逐項完整文字語音辨識｜每題 ${Math.min(5,Math.max(1,Number(t.hanziRepeatCount||1)))} 次`:isPractice?"中英文書寫練習連結":"學生編號｜設備手寫輸入辨識｜結果回傳";
     const speechStandardInfo=isSpeaking?speechRecognitionStandardInfo(t):"";
     const practiceText=Array.isArray(t.hanziTexts)&&t.hanziTexts.length?t.hanziTexts.join("、"):String(t.hanziText||"").trim()||(t.targetClasses||[]).join("");
     const modeName=isSpeaking?"口語模式(說)":"書寫模式(寫)";
@@ -919,7 +923,7 @@ function csvErrorRange(data,min,max){
   const parts=[];
   const listed=new Set();
   if(hasTypedCounts){
-    const image=formatEntries("imageItemErrorCounts","拍照辨識：");
+    const image=formatEntries("imageItemErrorCounts",data.taskMode==="hanzi"?"書寫辨識：":"拍照辨識：");
     const audio=formatEntries("audioItemErrorCounts","語音辨識：");
     if(image.text)parts.push(image.text);
     if(audio.text)parts.push(audio.text);
