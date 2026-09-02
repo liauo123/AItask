@@ -820,6 +820,7 @@ let platformSpeechRequestId=0;
 let preferredPlatformVoice=null;
 let platformSpeechLastText="",platformSpeechLastAt=0,platformSpeechLastPromise=null;
 let safariPrimedSpeechText="",safariPrimedSpeechPromise=null;
+let questionAutoSpeechTimer=null,questionAutoSpeechKey="";
 let questionReminderTimer=null,questionReminderCount=0,questionReminderKey="",questionReminderManuallyStopped=false,questionReminderBusy=false;
 const QUESTION_REMINDER_DELAY=7000;
 const QUESTION_REMINDER_LIMIT=10;
@@ -1422,6 +1423,7 @@ function isQuestionReminderApplicable(){
 
 function markQuestionPromptInteraction(){
   questionReminderManuallyStopped=true;
+  clearQuestionAutoSpeechTimer();
   clearQuestionReminderTimer(false);
 }
 
@@ -1434,6 +1436,27 @@ function playCurrentQuestionPrompt(){
 function isPlatformSpeechPlaying(){
   if(!("speechSynthesis" in window))return false;
   try{return window.speechSynthesis.speaking||window.speechSynthesis.pending}catch(e){return false}
+}
+
+function clearQuestionAutoSpeechTimer(){
+  if(questionAutoSpeechTimer){
+    clearTimeout(questionAutoSpeechTimer);
+    questionAutoSpeechTimer=null;
+  }
+  questionAutoSpeechKey="";
+}
+
+function scheduleQuestionAutoSpeech(callback,delay){
+  clearQuestionAutoSpeechTimer();
+  const key=task?`${taskId}|${task.taskMode||""}|${currentIndex}`:"";
+  questionAutoSpeechKey=key;
+  questionAutoSpeechTimer=setTimeout(()=>{
+    questionAutoSpeechTimer=null;
+    const currentKey=task?`${taskId}|${task.taskMode||""}|${currentIndex}`:"";
+    if(!key||key!==questionAutoSpeechKey||key!==currentKey||finished||paused||pageAutoPaused||exitInProgress)return;
+    questionAutoSpeechKey="";
+    callback();
+  },delay);
 }
 
 function scheduleQuestionReminder(resetForQuestion=false){
@@ -1558,6 +1581,7 @@ async function skipEvaluationQuestionAfterFiveWrong(){
   currentIndex++;
   resetCurrentVerification();
   renderTask();
+  if(currentIndex<task.targetClasses.length)prepareCurrentQuestionPrompt(true);
   if(resultRef){
     try{
       await resultRef.update({
@@ -1579,7 +1603,6 @@ async function skipEvaluationQuestionAfterFiveWrong(){
     finishTask();
   }else{
     setStatus("recognitionStatus",`「${item}」已連續答錯 5 次，已進入下一題。`,"error");
-    prepareCurrentQuestionPrompt(true);
   }
   return true;
 }
@@ -1699,7 +1722,7 @@ function prepareAdvancedPrompt(autoSpeak=true){
   $("repeatAdvancedPromptBtn").disabled=!currentAdvancedDescription;
 
   if(autoSpeak&&currentAdvancedDescription){
-    setTimeout(()=>speakAdvancedPrompt(true),250);
+    scheduleQuestionAutoSpeech(()=>speakAdvancedPrompt(true),250);
   }
 }
 
@@ -1708,7 +1731,7 @@ function prepareCurrentQuestionPrompt(autoSpeak=true){
   if(isAdvancedMode()||isDescriptionPromptMode()){
     prepareAdvancedPrompt(autoSpeak);
   }else if(isEvaluationMode()&&autoSpeak){
-    setTimeout(()=>speakEvaluationTarget(true),250);
+    scheduleQuestionAutoSpeech(()=>speakEvaluationTarget(true),250);
   }
 }
 
@@ -2159,7 +2182,7 @@ function renderHanziQuestion(){
   $("hanziSpeechPanel").classList.remove("hidden");
   setStatus("hanziStatus","請按下按鈕並完整念出畫面上的文字。");
   scheduleQuestionReminder(true);
-  setTimeout(()=>speakHanziPrompt(false,true),300);
+  scheduleQuestionAutoSpeech(()=>speakHanziPrompt(false,true),300);
 }
 
 function speakHanziPrompt(showError=true,autoPlayback=false){
@@ -4462,6 +4485,7 @@ async function completeCurrent(confidence,evidenceCanvas,evidenceDataURL="",audi
   currentIndex++;
   resetCurrentVerification();
   renderTask();
+  if(currentIndex<task.targetClasses.length)prepareCurrentQuestionPrompt(true);
 
   const evidence={
     targetClass:item,
@@ -4512,7 +4536,6 @@ async function completeCurrent(confidence,evidenceCanvas,evidenceDataURL="",audi
     }else{
       setStatus("recognitionStatus",`已完成「${item}」，請進行下一項。`,"success");
     }
-    prepareCurrentQuestionPrompt(true);
   }
 }
 
@@ -4655,6 +4678,7 @@ async function endTask(){
 function stopAll(preserveClickRound=false){
   taskSuccessAnimating=false;
   photoRecognizing=false;
+  clearQuestionAutoSpeechTimer();
   clearQuestionReminderTimer(false);
   clearClickTimers(preserveClickRound);
   if($("captureBtn"))$("captureBtn").disabled=false;
