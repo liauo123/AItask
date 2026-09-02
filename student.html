@@ -820,9 +820,9 @@ let platformSpeechRequestId=0;
 let preferredPlatformVoice=null;
 let platformSpeechLastText="",platformSpeechLastAt=0,platformSpeechLastPromise=null;
 let safariPrimedSpeechText="",safariPrimedSpeechPromise=null;
-let questionAutoSpeechTimer=null,questionAutoSpeechKey="";
+let questionAutoSpeechTimer=null,questionAutoSpeechKey="",questionAutoSpeechInFlightKey="";
 let questionReminderTimer=null,questionReminderCount=0,questionReminderKey="",questionReminderManuallyStopped=false,questionReminderBusy=false;
-const QUESTION_REMINDER_DELAY=7000;
+const QUESTION_REMINDER_DELAY=10000;
 const QUESTION_REMINDER_LIMIT=10;
 
 function refreshPlatformSpeechVoice(){
@@ -1399,7 +1399,7 @@ function continueAfterSafariPrimedSpeech(text,options){
   const primedPromise=safariPrimedSpeechPromise;
   safariPrimedSpeechText="";
   safariPrimedSpeechPromise=null;
-  return Promise.resolve(primedPromise).then(success=>success?true:speakPlatformText(value,options));
+  return Promise.resolve(primedPromise).then(success=>!!success);
 }
 
 function clearQuestionReminderTimer(resetState=false){
@@ -1413,6 +1413,13 @@ function clearQuestionReminderTimer(resetState=false){
     questionReminderKey="";
     questionReminderManuallyStopped=false;
   }
+}
+
+function resetQuestionReminderForCurrentQuestion(){
+  clearQuestionReminderTimer(false);
+  questionReminderKey=task?`${taskId}|${task.taskMode||""}|${currentIndex}`:"";
+  questionReminderCount=0;
+  questionReminderManuallyStopped=false;
 }
 
 function isQuestionReminderApplicable(){
@@ -1447,15 +1454,22 @@ function clearQuestionAutoSpeechTimer(){
 }
 
 function scheduleQuestionAutoSpeech(callback,delay){
-  clearQuestionAutoSpeechTimer();
   const key=task?`${taskId}|${task.taskMode||""}|${currentIndex}`:"";
+  if(key&&key===questionAutoSpeechInFlightKey)return;
+  clearQuestionAutoSpeechTimer();
   questionAutoSpeechKey=key;
-  questionAutoSpeechTimer=setTimeout(()=>{
+  questionAutoSpeechTimer=setTimeout(async()=>{
     questionAutoSpeechTimer=null;
     const currentKey=task?`${taskId}|${task.taskMode||""}|${currentIndex}`:"";
     if(!key||key!==questionAutoSpeechKey||key!==currentKey||finished||paused||pageAutoPaused||exitInProgress)return;
     questionAutoSpeechKey="";
-    callback();
+    questionAutoSpeechInFlightKey=key;
+    try{await Promise.resolve(callback())}catch(e){}
+    if(questionAutoSpeechInFlightKey===key)questionAutoSpeechInFlightKey="";
+    const completedKey=task?`${taskId}|${task.taskMode||""}|${currentIndex}`:"";
+    if(key===completedKey&&!questionReminderManuallyStopped&&!finished&&!paused&&!pageAutoPaused&&!exitInProgress){
+      scheduleQuestionReminder(true);
+    }
   },delay);
 }
 
@@ -2181,7 +2195,7 @@ function renderHanziQuestion(){
   updateThumbnailElement("hanziTargetThumbnail",target,"文字練習題目縮圖");
   $("hanziSpeechPanel").classList.remove("hidden");
   setStatus("hanziStatus","請按下按鈕並完整念出畫面上的文字。");
-  scheduleQuestionReminder(true);
+  resetQuestionReminderForCurrentQuestion();
   scheduleQuestionAutoSpeech(()=>speakHanziPrompt(false,true),300);
 }
 
@@ -4563,7 +4577,7 @@ function renderTask(){
     </div>`).join("");
   updateVerificationUI();
   restoreCaptureButtonForCurrentQuestion();
-  scheduleQuestionReminder(true);
+  resetQuestionReminderForCurrentQuestion();
 }
 
 function finishTask(){
