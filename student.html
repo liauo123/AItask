@@ -1431,6 +1431,11 @@ function playCurrentQuestionPrompt(){
   return speakEvaluationTarget();
 }
 
+function isPlatformSpeechPlaying(){
+  if(!("speechSynthesis" in window))return false;
+  try{return window.speechSynthesis.speaking||window.speechSynthesis.pending}catch(e){return false}
+}
+
 function scheduleQuestionReminder(resetForQuestion=false){
   clearQuestionReminderTimer(false);
   const key=task?`${taskId}|${task.taskMode||""}|${currentIndex}`:"";
@@ -1446,6 +1451,10 @@ function scheduleQuestionReminder(resetForQuestion=false){
 async function runQuestionReminder(){
   questionReminderTimer=null;
   if(!isQuestionReminderApplicable()||questionReminderManuallyStopped||questionReminderBusy)return;
+  if(isPlatformSpeechPlaying()){
+    scheduleQuestionReminder(false);
+    return;
+  }
   questionReminderBusy=true;
   questionReminderCount++;
   try{await Promise.resolve(playCurrentQuestionPrompt())}catch(e){}
