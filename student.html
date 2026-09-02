@@ -819,6 +819,7 @@ let platformSpeechUnlocked=false;
 let platformSpeechRequestId=0;
 let preferredPlatformVoice=null;
 let platformSpeechLastText="",platformSpeechLastAt=0,platformSpeechLastPromise=null;
+let safariPrimedSpeechText="",safariPrimedSpeechPromise=null;
 let questionReminderTimer=null,questionReminderCount=0,questionReminderKey="",questionReminderManuallyStopped=false,questionReminderBusy=false;
 const QUESTION_REMINDER_DELAY=7000;
 const QUESTION_REMINDER_LIMIT=10;
@@ -856,6 +857,8 @@ function stopPlatformSpeech(){
   platformSpeechLastText="";
   platformSpeechLastAt=0;
   platformSpeechLastPromise=null;
+  safariPrimedSpeechText="";
+  safariPrimedSpeechPromise=null;
   if(!("speechSynthesis" in window))return;
   try{window.speechSynthesis.cancel()}catch(e){}
 }
@@ -1377,10 +1380,25 @@ function primeSafariFirstQuestionSpeech(){
   currentIndex=savedIndex;
   if(!config)return false;
   platformSpeechUnlocked=true;
+  platformSpeechLastText="";
+  platformSpeechLastAt=0;
+  platformSpeechLastPromise=null;
+  safariPrimedSpeechText="";
+  safariPrimedSpeechPromise=null;
   refreshPlatformSpeechVoice();
   try{window.speechSynthesis.resume()}catch(e){}
-  speakPlatformText(config.text,{rate:config.rate,immediate:true});
+  safariPrimedSpeechText=config.text;
+  safariPrimedSpeechPromise=speakPlatformText(config.text,{rate:config.rate,immediate:true});
   return true;
+}
+
+function continueAfterSafariPrimedSpeech(text,options){
+  const value=String(text||"").trim();
+  if(!safariPrimedSpeechPromise||value!==safariPrimedSpeechText)return null;
+  const primedPromise=safariPrimedSpeechPromise;
+  safariPrimedSpeechText="";
+  safariPrimedSpeechPromise=null;
+  return Promise.resolve(primedPromise).then(success=>success?true:speakPlatformText(value,options));
 }
 
 function clearQuestionReminderTimer(resetState=false){
@@ -1640,7 +1658,7 @@ function shuffleGameTargetsForStudent(){
   gameTargetsShuffled=true;
 }
 
-function speakAdvancedPrompt(){
+function speakAdvancedPrompt(autoPlayback=false){
   const description=currentAdvancedDescription.trim();
 
   if(!description){
@@ -1653,6 +1671,10 @@ function speakAdvancedPrompt(){
     return Promise.resolve(false);
   }
 
+  if(autoPlayback){
+    const primed=continueAfterSafariPrimedSpeech(description,{rate:.85});
+    if(primed)return primed;
+  }
   return speakPlatformText(description,{rate:.85});
 }
 
@@ -1668,7 +1690,7 @@ function prepareAdvancedPrompt(autoSpeak=true){
   $("repeatAdvancedPromptBtn").disabled=!currentAdvancedDescription;
 
   if(autoSpeak&&currentAdvancedDescription){
-    setTimeout(()=>speakAdvancedPrompt(),250);
+    setTimeout(()=>speakAdvancedPrompt(true),250);
   }
 }
 
@@ -1677,11 +1699,11 @@ function prepareCurrentQuestionPrompt(autoSpeak=true){
   if(isAdvancedMode()||isDescriptionPromptMode()){
     prepareAdvancedPrompt(autoSpeak);
   }else if(isEvaluationMode()&&autoSpeak){
-    setTimeout(()=>speakEvaluationTarget(),250);
+    setTimeout(()=>speakEvaluationTarget(true),250);
   }
 }
 
-function speakEvaluationTarget(){
+function speakEvaluationTarget(autoPlayback=false){
   if(isTeachingMode()||isAdvancedMode()||currentIndex>=task.targetClasses.length){
     return Promise.resolve(false);
   }
@@ -1698,6 +1720,10 @@ function speakEvaluationTarget(){
     return Promise.resolve(false);
   }
 
+  if(autoPlayback){
+    const primed=continueAfterSafariPrimedSpeech(label,{rate:.9});
+    if(primed)return primed;
+  }
   return speakPlatformText(label,{rate:.9});
 }
 
@@ -2124,15 +2150,19 @@ function renderHanziQuestion(){
   $("hanziSpeechPanel").classList.remove("hidden");
   setStatus("hanziStatus","請按下按鈕並完整念出畫面上的文字。");
   scheduleQuestionReminder(true);
-  setTimeout(()=>speakHanziPrompt(false),300);
+  setTimeout(()=>speakHanziPrompt(false,true),300);
 }
 
-function speakHanziPrompt(showError=true){
+function speakHanziPrompt(showError=true,autoPlayback=false){
   const target=String(task&&task.targetClasses[currentIndex]||"").trim();
   if(!target||finished)return Promise.resolve(false);
   if(!("speechSynthesis" in window)){
     if(showError)setStatus("hanziStatus","此瀏覽器不支援語音提醒。","error");
     return Promise.resolve(false);
+  }
+  if(autoPlayback){
+    const primed=continueAfterSafariPrimedSpeech(target,{rate:.82});
+    if(primed)return primed;
   }
   return speakPlatformText(target,{rate:.82});
 }
