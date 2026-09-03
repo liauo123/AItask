@@ -1488,14 +1488,6 @@ function scheduleQuestionAutoSpeech(callback,delay){
 
 function scheduleQuestionReminder(resetForQuestion=false){
   clearQuestionReminderTimer(false);
-  const key=task?`${taskId}|${task.taskMode||""}|${currentIndex}`:"";
-  if(resetForQuestion||key!==questionReminderKey){
-    questionReminderKey=key;
-    questionReminderCount=0;
-    questionReminderManuallyStopped=false;
-  }
-  if(!isQuestionReminderApplicable()||questionReminderManuallyStopped)return;
-  questionReminderTimer=setTimeout(runQuestionReminder,QUESTION_REMINDER_DELAY);
 }
 
 async function runQuestionReminder(){
@@ -2779,7 +2771,7 @@ async function finishClickRound(timedOut=false,speechFinished=null){
   clickNextTimer=setTimeout(showNextClickTrial,timedOut?850:300);
 }
 
-function showNextClickTrial(resumeRound=false){
+async function showNextClickTrial(resumeRound=false){
   clearClickTimers(resumeRound);
   if(finished||clickTrialIndex>=clickSequence.length){finishClickMode();return}
   if(!resumeRound||!clickCurrentTarget||!clickCurrentChoices.length){
@@ -2826,6 +2818,12 @@ function showNextClickTrial(resumeRound=false){
     targets.appendChild(button);
   });
   requestAnimationFrame(()=>positionClickTargets());
+  const spokenTarget=clickCurrentTarget;
+  await speakClickLabel(spokenTarget);
+  if(
+    finished||paused||pageAutoPaused||exitInProgress||
+    clickCurrentTarget!==spokenTarget||clickTrialIndex>=clickSequence.length
+  )return;
   const durationMs=task.clickDisplaySeconds*1000;
   const fill=$("clickCountdownFill");
   $("clickCountdown").classList.remove("hidden");
