@@ -2197,7 +2197,17 @@ function showHanziPracticePicker(){
 }
 
 function getHanziPracticeItems(){
-  const items=splitHanziWritingItems(getHanziSourceTexts());
+  const items=[];
+  getHanziSourceTexts().forEach(value=>{
+    const wordsAndCharacters=String(value||"").match(/[A-Za-z]+|\p{Script=Han}/gu)||[];
+    wordsAndCharacters.forEach(item=>{
+      if(/^[A-Za-z]+$/.test(item)){
+        Array.from(item).forEach(letter=>items.push(letter));
+      }else{
+        items.push(item);
+      }
+    });
+  });
   return items.length?items:[...(task?.targetClasses||[])];
 }
 
