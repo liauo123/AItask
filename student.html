@@ -115,7 +115,7 @@ button{min-height:50px;border:0;border-radius:15px;padding:0 16px;cursor:pointer
 .target-question-row strong{margin-top:0}
 .target-thumbnail{width:72px;height:72px;object-fit:cover;border-radius:14px;border:2px solid #93c5fd;background:#fff;box-shadow:0 5px 14px rgba(37,99,235,.16);flex:0 0 auto}
 #advancedPromptCard.speech-only-prompt .target-thumbnail{width:144px;height:144px;border-radius:28px}
-body[data-mode-theme="click"] #clickPrompt #clickPromptImage{width:min(194px,76vw);height:min(194px,76vw);border-radius:24px;object-fit:cover}
+body[data-mode-theme="click"] #clickPrompt #clickPromptImage{width:min(144px,76vw);height:min(144px,76vw);border-radius:24px;object-fit:cover}
 body[data-mode-theme="speaking"] #hanziTargetThumbnail,
 body[data-mode-theme="reading"] #advancedPromptCard.speech-only-prompt #advancedTargetThumbnail{width:min(288px,76vw);height:min(288px,76vw);border-radius:28px;object-fit:cover}
 body[data-mode-theme="speaking"] .hanzi-question-row,
@@ -357,7 +357,7 @@ html,body{
   .target-question-row strong{margin-top:0}
   .target-thumbnail{width:58px;height:58px;border-radius:11px}
   #advancedPromptCard.speech-only-prompt .target-thumbnail{width:116px;height:116px;border-radius:22px}
-  body[data-mode-theme="click"] #clickPrompt #clickPromptImage{width:min(157px,76vw);height:min(157px,76vw);border-radius:20px}
+  body[data-mode-theme="click"] #clickPrompt #clickPromptImage{width:min(116px,76vw);height:min(116px,76vw);border-radius:20px}
   body[data-mode-theme="speaking"] #hanziTargetThumbnail,
   body[data-mode-theme="reading"] #advancedPromptCard.speech-only-prompt #advancedTargetThumbnail{width:min(232px,76vw);height:min(232px,76vw);border-radius:22px}
   .progress{margin-bottom:7px}
@@ -1403,7 +1403,11 @@ function primeSafariFirstQuestionSpeech(){
   refreshPlatformSpeechVoice();
   try{window.speechSynthesis.resume()}catch(e){}
   safariPrimedSpeechText=config.text;
-  safariPrimedSpeechPromise=speakPlatformText(config.text,{rate:config.rate,immediate:true});
+  safariPrimedSpeechPromise=speakPlatformText(config.text,{
+    rate:config.rate,
+    volume:isClickMode() ? .01 : 1,
+    immediate:true
+  });
   return true;
 }
 
@@ -2660,7 +2664,17 @@ function clearClickTimers(preserveRound=false){
 function speakClickLabel(label,autoPlayback=false){
   if(autoPlayback){
     const primed=continueAfterSafariPrimedSpeech(label,{rate:.9});
-    if(primed)return primed;
+    if(primed){
+      return Promise.race([
+        Promise.resolve(primed),
+        new Promise(resolve=>setTimeout(resolve,600))
+      ]).then(()=>{
+        platformSpeechLastText="";
+        platformSpeechLastAt=0;
+        platformSpeechLastPromise=null;
+        return speakPlatformText(label,{rate:.9,immediate:true});
+      });
+    }
   }
   return speakPlatformText(label,{rate:.9});
 }
@@ -2824,9 +2838,11 @@ async function showNextClickTrial(resumeRound=false){
   });
   requestAnimationFrame(()=>positionClickTargets());
   const spokenTarget=clickCurrentTarget;
+  clickShownAt=performance.now();
+  clickTrialActive=true;
   await speakClickLabel(spokenTarget,true);
   if(
-    finished||paused||pageAutoPaused||exitInProgress||
+    !clickTrialActive||finished||paused||pageAutoPaused||exitInProgress||
     clickCurrentTarget!==spokenTarget||clickTrialIndex>=clickSequence.length
   )return;
   const durationMs=task.clickDisplaySeconds*1000;
@@ -2836,8 +2852,6 @@ async function showNextClickTrial(resumeRound=false){
   requestAnimationFrame(()=>requestAnimationFrame(()=>{
     fill.style.transition=`width ${durationMs}ms linear`;fill.style.width="0%";
   }));
-  clickShownAt=performance.now();
-  clickTrialActive=true;
   clickTrialTimer=setTimeout(()=>{
     playTaskErrorSound();
     finishClickRound(true);
