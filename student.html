@@ -814,7 +814,7 @@ let studentLeaveConfirmed=false;
 let studentPageMarkedLeft=false,studentPresenceWritePromise=Promise.resolve();
 let clickSequence=[],clickTrialIndex=0,clickRecords=[],clickTrialTimer=null,clickNextTimer=null,clickShownAt=0,clickTrialActive=false,clickCurrentTarget="",clickCurrentChoices=[];
 let hanziSpeechRecognition=null,hanziSpeechStarting=false;
-let hanziPracticeIndex=0,hanziPracticeItems=[];
+let hanziPracticeItems=[];
 
 const $=id=>document.getElementById(id);
 const numberButtons=[...document.querySelectorAll(".number-btn")];
@@ -2193,7 +2193,6 @@ function showHanziPracticePicker(){
   $("hanziCopyrightNotice").classList.remove("hidden");
   $("hanziTaskTitle").textContent=task.title||"書寫模式(寫)";
   hanziPracticeItems=getHanziPracticeItems();
-  hanziPracticeIndex=0;
   renderHanziPracticeCharacter();
 }
 
@@ -2247,20 +2246,14 @@ function prepareHanziWritingQuestionItems(){
 function renderHanziPracticeCharacter(){
   const picker=$("hanziPicker");
   const total=hanziPracticeItems.length;
-  picker.classList.add("single");
-  if(hanziPracticeIndex>=total){
-    $("hanziPracticeIntro").textContent="書寫練習完成！";
-    picker.innerHTML="";
-    return;
-  }
-  const character=String(hanziPracticeItems[hanziPracticeIndex]||"");
-  $("hanziPracticeIntro").textContent=`請點選文字開啟書寫練習（${hanziPracticeIndex+1} / ${total}）`;
-  picker.innerHTML=`<button class="hanzi-char" type="button" data-hanzi="${escapeHtml(character)}">${escapeHtml(character)}</button>`;
-}
-
-function advanceHanziPracticeCharacter(){
-  hanziPracticeIndex++;
-  renderHanziPracticeCharacter();
+  picker.classList.remove("single");
+  $("hanziPracticeIntro").textContent=total
+    ? `請點選要練習的文字（共 ${total} 個）`
+    : "沒有可供練習的文字。";
+  picker.innerHTML=hanziPracticeItems.map(character=>{
+    const text=String(character||"");
+    return `<button class="hanzi-char" type="button" data-hanzi="${escapeHtml(text)}">${escapeHtml(text)}</button>`;
+  }).join("");
 }
 
 function disableHanziCamera(){
@@ -4949,14 +4942,12 @@ $("hanziPicker").addEventListener("click",event=>{
       url.searchParams.set("step",String(step));
     }
     window.open(url.toString(),"_blank","noopener");
-    advanceHanziPracticeCharacter();
     return;
   }
   if(/^\p{Script=Han}$/u.test(character)){
     const url=new URL("https://stroke-order.learningweb.moe.edu.tw/searchW.jsp");
     url.searchParams.set("WORD",character);
     window.open(url.toString(),"_blank","noopener");
-    advanceHanziPracticeCharacter();
   }
 });
 $("againBtn").onclick=()=>{if(!primeSafariFirstQuestionSpeech())unlockPlatformSpeech();return repeatTask()};
