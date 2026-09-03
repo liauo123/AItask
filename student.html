@@ -1886,6 +1886,7 @@ async function loadTask(){
       task.hanziPracticeEnabled===undefined?!task.hanziWritingEnabled:!!task.hanziPracticeEnabled
     );
     task.hanziWritingEnabled=isHanziMode()&&!task.hanziSpeechEnabled&&!task.hanziPracticeEnabled;
+    if(task.taskMode==="hanzi"&&task.hanziWritingEnabled)prepareHanziWritingQuestionItems();
     task.hanziRepeatCount=Math.min(5,Math.max(1,Number(task.hanziRepeatCount||1)));
     if(isHanziMode()&&task.hanziSpeechEnabled){
       const savedQuestionSequence=Array.isArray(task.hanziQuestionSequence)
@@ -2197,15 +2198,50 @@ function showHanziPracticePicker(){
 }
 
 function getHanziPracticeItems(){
-  const source=Array.isArray(task?.hanziTexts)&&task.hanziTexts.length
-    ? task.hanziTexts
-    : task?.targetClasses||[];
+  const items=splitHanziWritingItems(getHanziSourceTexts());
+  return items.length?items:[...(task?.targetClasses||[])];
+}
+
+function getHanziSourceTexts(){
+  const savedTexts=Array.isArray(task?.hanziTexts)
+    ? task.hanziTexts.map(value=>String(value||"").trim()).filter(Boolean)
+    : [];
+  if(savedTexts.length)return savedTexts;
+  const savedText=String(task?.hanziText||"")
+    .split(/\r?\n/)
+    .map(value=>value.trim())
+    .filter(Boolean);
+  if(savedText.length)return savedText;
+  return Array.isArray(task?.targetClasses)
+    ? task.targetClasses.map(value=>String(value||"").trim()).filter(Boolean)
+    : [];
+}
+
+function splitHanziWritingItems(source){
   const items=[];
   source.forEach(value=>{
     const tokens=String(value||"").match(/[A-Za-z]+|\p{Script=Han}/gu)||[];
     tokens.forEach(token=>items.push(token));
   });
-  return items.length?items:[...(task?.targetClasses||[])];
+  return items;
+}
+
+function prepareHanziWritingQuestionItems(){
+  const source=getHanziSourceTexts();
+  const items=splitHanziWritingItems(source);
+  if(!items.length)return;
+  const originalThumbnails={...(task.classThumbnails||{})};
+  const mappedThumbnails={...originalThumbnails};
+  source.forEach(value=>{
+    const thumbnail=originalThumbnails[value];
+    if(!thumbnail)return;
+    splitHanziWritingItems([value]).forEach(item=>{
+      if(!mappedThumbnails[item])mappedThumbnails[item]=thumbnail;
+    });
+  });
+  task.classThumbnails=mappedThumbnails;
+  task.targetClasses=items;
+  task.hanziQuestionSequence=[...items];
 }
 
 function renderHanziPracticeCharacter(){
