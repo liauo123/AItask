@@ -814,7 +814,7 @@ let studentLeaveConfirmed=false;
 let studentPageMarkedLeft=false,studentPresenceWritePromise=Promise.resolve();
 let clickSequence=[],clickTrialIndex=0,clickRecords=[],clickTrialTimer=null,clickNextTimer=null,clickShownAt=0,clickTrialActive=false,clickCurrentTarget="",clickCurrentChoices=[];
 let hanziSpeechRecognition=null,hanziSpeechStarting=false;
-let hanziPracticeIndex=0;
+let hanziPracticeIndex=0,hanziPracticeItems=[];
 
 const $=id=>document.getElementById(id);
 const numberButtons=[...document.querySelectorAll(".number-btn")];
@@ -2191,20 +2191,33 @@ function showHanziPracticePicker(){
   $("hanziPicker").classList.remove("hidden");
   $("hanziCopyrightNotice").classList.remove("hidden");
   $("hanziTaskTitle").textContent=task.title||"書寫模式(寫)";
+  hanziPracticeItems=getHanziPracticeItems();
   hanziPracticeIndex=0;
   renderHanziPracticeCharacter();
 }
 
+function getHanziPracticeItems(){
+  const source=Array.isArray(task?.hanziTexts)&&task.hanziTexts.length
+    ? task.hanziTexts
+    : task?.targetClasses||[];
+  const items=[];
+  source.forEach(value=>{
+    const tokens=String(value||"").match(/[A-Za-z]+|\p{Script=Han}/gu)||[];
+    tokens.forEach(token=>items.push(token));
+  });
+  return items.length?items:[...(task?.targetClasses||[])];
+}
+
 function renderHanziPracticeCharacter(){
   const picker=$("hanziPicker");
-  const total=Array.isArray(task?.targetClasses)?task.targetClasses.length:0;
+  const total=hanziPracticeItems.length;
   picker.classList.add("single");
   if(hanziPracticeIndex>=total){
     $("hanziPracticeIntro").textContent="書寫練習完成！";
     picker.innerHTML="";
     return;
   }
-  const character=String(task.targetClasses[hanziPracticeIndex]||"");
+  const character=String(hanziPracticeItems[hanziPracticeIndex]||"");
   $("hanziPracticeIntro").textContent=`請點選文字開啟書寫練習（${hanziPracticeIndex+1} / ${total}）`;
   picker.innerHTML=`<button class="hanzi-char" type="button" data-hanzi="${escapeHtml(character)}">${escapeHtml(character)}</button>`;
 }
@@ -4889,14 +4902,16 @@ $("hanziWritingInput").addEventListener("keydown",event=>{
 $("hanziPicker").addEventListener("click",event=>{
   const button=event.target.closest("[data-hanzi]");if(!button)return;
   const character=String(button.dataset.hanzi||"");
-  if(/^[A-Za-z]$/.test(character)){
-    const pair=character.toUpperCase().charCodeAt(0)-65;
-    const step=character===character.toLowerCase()?1:0;
+  if(/^[A-Za-z]+$/.test(character)){
     const url=new URL("https://tinystepslearning.com/free-letter-tracing-game-for-kids");
-    url.searchParams.set("fs","1");
-    url.searchParams.set("level","1");
-    url.searchParams.set("pair",String(pair));
-    url.searchParams.set("step",String(step));
+    if(character.length===1){
+      const pair=character.toUpperCase().charCodeAt(0)-65;
+      const step=character===character.toLowerCase()?1:0;
+      url.searchParams.set("fs","1");
+      url.searchParams.set("level","1");
+      url.searchParams.set("pair",String(pair));
+      url.searchParams.set("step",String(step));
+    }
     window.open(url.toString(),"_blank","noopener");
     advanceHanziPracticeCharacter();
     return;
