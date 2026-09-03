@@ -263,7 +263,7 @@ body[data-mode-theme] .target-thumbnail,
 body[data-mode-theme] .speak-btn{border-color:var(--mode-border);color:var(--mode-text)}
 body[data-mode-theme] .target-thumbnail{box-shadow:0 5px 14px var(--mode-shadow)}
 body[data-mode-theme] .progress>div{background:var(--primary)}
-.hanzi-card{background:#fff1f2;border:2px solid #fb7185}.hanzi-card h2{color:#991b1b;text-align:center}.hanzi-picker{display:grid;grid-template-columns:repeat(auto-fit,minmax(76px,1fr));gap:12px;margin-top:14px}.hanzi-char{min-height:76px;background:#fff;border:2px solid #fb7185;color:#991b1b;font-size:34px;border-radius:16px}.hanzi-question-row{display:flex;align-items:center;justify-content:center;gap:12px;margin:10px}.hanzi-question{text-align:center;font-size:clamp(32px,10vw,64px);font-weight:900;color:#991b1b;line-height:1.35;word-break:break-all}.hanzi-prompt-icon{flex:0 0 46px}.hanzi-note{text-align:center;color:#7f1d1d;line-height:1.6}.hanzi-copyright{margin-top:14px;padding:12px;border:1px solid #fb7185;border-radius:12px;background:#fff;color:#7f1d1d;font-size:.88rem;line-height:1.7}.hanzi-copyright a{color:#991b1b;font-weight:800}.hanzi-stage-title{text-align:center;font-weight:900;color:#991b1b}.hanzi-speech{padding:18px;text-align:center;background:#ffe4e6;border-radius:16px;margin-top:12px}
+.hanzi-card{background:#fff1f2;border:2px solid #fb7185}.hanzi-card h2{color:#991b1b;text-align:center}.hanzi-picker{display:grid;grid-template-columns:repeat(auto-fit,minmax(76px,1fr));gap:12px;margin-top:14px}.hanzi-picker.single{grid-template-columns:minmax(96px,180px);justify-content:center}.hanzi-char{min-height:76px;background:#fff;border:2px solid #fb7185;color:#991b1b;font-size:34px;border-radius:16px}.hanzi-question-row{display:flex;align-items:center;justify-content:center;gap:12px;margin:10px}.hanzi-question{text-align:center;font-size:clamp(32px,10vw,64px);font-weight:900;color:#991b1b;line-height:1.35;word-break:break-all}.hanzi-prompt-icon{flex:0 0 46px}.hanzi-note{text-align:center;color:#7f1d1d;line-height:1.6}.hanzi-copyright{margin-top:14px;padding:12px;border:1px solid #fb7185;border-radius:12px;background:#fff;color:#7f1d1d;font-size:.88rem;line-height:1.7}.hanzi-copyright a{color:#991b1b;font-weight:800}.hanzi-stage-title{text-align:center;font-weight:900;color:#991b1b}.hanzi-speech{padding:18px;text-align:center;background:#ffe4e6;border-radius:16px;margin-top:12px}
 .hanzi-writing{padding:18px;background:#ffe4e6;border:1px solid #fb7185;border-radius:16px;margin-top:12px;text-align:center}.hanzi-writing label{display:block;color:#7f1d1d;font-weight:900;margin-bottom:10px}.hanzi-writing-row{display:flex;gap:10px;align-items:stretch}.hanzi-writing input{min-width:0;flex:1;font-size:clamp(24px,6vw,36px);font-weight:900;text-align:center;border:2px solid #fb7185;background:#fff;color:#991b1b}.hanzi-writing button{flex:0 0 auto;background:#dc2626;color:#fff;border-color:#dc2626}
 body[data-mode-theme="speaking"] .hanzi-card{background:#f0f7ff;border-color:#93c5fd}
 body[data-mode-theme="speaking"] .hanzi-card h2,
@@ -814,6 +814,7 @@ let studentLeaveConfirmed=false;
 let studentPageMarkedLeft=false,studentPresenceWritePromise=Promise.resolve();
 let clickSequence=[],clickTrialIndex=0,clickRecords=[],clickTrialTimer=null,clickNextTimer=null,clickShownAt=0,clickTrialActive=false,clickCurrentTarget="",clickCurrentChoices=[];
 let hanziSpeechRecognition=null,hanziSpeechStarting=false;
+let hanziPracticeIndex=0;
 
 const $=id=>document.getElementById(id);
 const numberButtons=[...document.querySelectorAll(".number-btn")];
@@ -2190,8 +2191,27 @@ function showHanziPracticePicker(){
   $("hanziPicker").classList.remove("hidden");
   $("hanziCopyrightNotice").classList.remove("hidden");
   $("hanziTaskTitle").textContent=task.title||"書寫模式(寫)";
-  $("hanziPracticeIntro").textContent="請點選中文字或英文字母，開啟對應的書寫練習頁面。";
-  $("hanziPicker").innerHTML=task.targetClasses.map(char=>`<button class="hanzi-char" type="button" data-hanzi="${escapeHtml(char)}">${escapeHtml(char)}</button>`).join("");
+  hanziPracticeIndex=0;
+  renderHanziPracticeCharacter();
+}
+
+function renderHanziPracticeCharacter(){
+  const picker=$("hanziPicker");
+  const total=Array.isArray(task?.targetClasses)?task.targetClasses.length:0;
+  picker.classList.add("single");
+  if(hanziPracticeIndex>=total){
+    $("hanziPracticeIntro").textContent="書寫練習完成！";
+    picker.innerHTML="";
+    return;
+  }
+  const character=String(task.targetClasses[hanziPracticeIndex]||"");
+  $("hanziPracticeIntro").textContent=`請點選文字開啟書寫練習（${hanziPracticeIndex+1} / ${total}）`;
+  picker.innerHTML=`<button class="hanzi-char" type="button" data-hanzi="${escapeHtml(character)}">${escapeHtml(character)}</button>`;
+}
+
+function advanceHanziPracticeCharacter(){
+  hanziPracticeIndex++;
+  renderHanziPracticeCharacter();
 }
 
 function disableHanziCamera(){
@@ -4878,12 +4898,14 @@ $("hanziPicker").addEventListener("click",event=>{
     url.searchParams.set("pair",String(pair));
     url.searchParams.set("step",String(step));
     window.open(url.toString(),"_blank","noopener");
+    advanceHanziPracticeCharacter();
     return;
   }
   if(/^\p{Script=Han}$/u.test(character)){
     const url=new URL("https://stroke-order.learningweb.moe.edu.tw/searchW.jsp");
     url.searchParams.set("WORD",character);
     window.open(url.toString(),"_blank","noopener");
+    advanceHanziPracticeCharacter();
   }
 });
 $("againBtn").onclick=()=>{if(!primeSafariFirstQuestionSpeech())unlockPlatformSpeech();return repeatTask()};
