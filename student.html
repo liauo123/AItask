@@ -264,6 +264,7 @@ body[data-mode-theme] .speak-btn{border-color:var(--mode-border);color:var(--mod
 body[data-mode-theme] .target-thumbnail{box-shadow:0 5px 14px var(--mode-shadow)}
 body[data-mode-theme] .progress>div{background:var(--primary)}
 .hanzi-card{background:#fff1f2;border:2px solid #fb7185}.hanzi-card h2{color:#991b1b;text-align:center}.hanzi-picker{display:grid;grid-template-columns:repeat(auto-fit,minmax(76px,1fr));gap:12px;margin-top:14px}.hanzi-char{min-height:76px;background:#fff;border:2px solid #fb7185;color:#991b1b;font-size:34px;border-radius:16px}.hanzi-question-row{display:flex;align-items:center;justify-content:center;gap:12px;margin:10px}.hanzi-question{text-align:center;font-size:clamp(32px,10vw,64px);font-weight:900;color:#991b1b;line-height:1.35;word-break:break-all}.hanzi-prompt-icon{flex:0 0 46px}.hanzi-note{text-align:center;color:#7f1d1d;line-height:1.6}.hanzi-copyright{margin-top:14px;padding:12px;border:1px solid #fb7185;border-radius:12px;background:#fff;color:#7f1d1d;font-size:.88rem;line-height:1.7}.hanzi-copyright a{color:#991b1b;font-weight:800}.hanzi-stage-title{text-align:center;font-weight:900;color:#991b1b}.hanzi-speech{padding:18px;text-align:center;background:#ffe4e6;border-radius:16px;margin-top:12px}
+.hanzi-writing{padding:18px;background:#ffe4e6;border:1px solid #fb7185;border-radius:16px;margin-top:12px;text-align:center}.hanzi-writing label{display:block;color:#7f1d1d;font-weight:900;margin-bottom:10px}.hanzi-writing-row{display:flex;gap:10px;align-items:stretch}.hanzi-writing input{min-width:0;flex:1;font-size:clamp(24px,6vw,36px);font-weight:900;text-align:center;border:2px solid #fb7185;background:#fff;color:#991b1b}.hanzi-writing button{flex:0 0 auto;background:#dc2626;color:#fff;border-color:#dc2626}
 body[data-mode-theme="speaking"] .hanzi-card{background:#f0f7ff;border-color:#93c5fd}
 body[data-mode-theme="speaking"] .hanzi-card h2,
 body[data-mode-theme="speaking"] .hanzi-question,
@@ -689,6 +690,13 @@ button,input{max-width:100%}
       <div id="hanziSpeechPanel" class="hanzi-speech hidden">
         <div class="hanzi-note">請按下辨識按鈕，完整念出畫面上的名稱文字。</div>
         <button id="speakHanziBtn" class="round-action-btn mic-action-btn" type="button" aria-label="開始語音辨識" title="開始語音辨識">🎤</button>
+      </div>
+      <div id="hanziWritingPanel" class="hanzi-writing hidden">
+        <label for="hanziWritingInput">請使用設備手寫鍵盤輸入答案</label>
+        <div class="hanzi-writing-row">
+          <input id="hanziWritingInput" type="text" inputmode="text" enterkeyhint="done" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="書寫答案">
+          <button id="submitHanziWritingBtn" class="primary" type="button">送出</button>
+        </div>
       </div>
       <div id="hanziStatus" class="status">等待作答。</div>
     </div>
@@ -1246,6 +1254,10 @@ function isHanziMode(){
 
 function isSpeakingMode(){
   return !!(task&&task.taskMode==="speaking");
+}
+
+function isHanziPracticeMode(){
+  return !!(task&&task.taskMode==="hanzi"&&task.hanziPracticeEnabled);
 }
 
 function isReadingMode(){
@@ -1868,8 +1880,11 @@ async function loadTask(){
     task.clickDisplaySeconds=Math.min(8,Math.max(3,Number(task.clickDisplaySeconds||5)));
     task.clickRepeatCount=Math.min(5,Math.max(3,Number(task.clickRepeatCount||3)));
     task.clickSimultaneousCount=Math.min(3,Math.max(1,Number(task.clickSimultaneousCount||1)),task.targetClasses.length);
-    task.hanziWritingEnabled=false;
     task.hanziSpeechEnabled=isHanziMode()&&!!task.hanziSpeechEnabled;
+    task.hanziPracticeEnabled=isHanziMode()&&!task.hanziSpeechEnabled&&(
+      task.hanziPracticeEnabled===undefined?!task.hanziWritingEnabled:!!task.hanziPracticeEnabled
+    );
+    task.hanziWritingEnabled=isHanziMode()&&!task.hanziSpeechEnabled&&!task.hanziPracticeEnabled;
     task.hanziRepeatCount=Math.min(5,Math.max(1,Number(task.hanziRepeatCount||1)));
     if(isHanziMode()&&task.hanziSpeechEnabled){
       const savedQuestionSequence=Array.isArray(task.hanziQuestionSequence)
@@ -1916,7 +1931,7 @@ async function loadTask(){
       ? `｜${effectiveAudioRequiredClasses.length}項需要語音辨識`
       : "";
     $("taskMeta").textContent=isHanziMode()
-      ? `${isSpeakingMode()?"口語模式(說)":"書寫模式(寫)"}｜${task.hanziSpeechEnabled?`逐項完整文字語音辨識｜每題 ${task.hanziRepeatCount} 次`:"開啟中英文書寫練習"}`
+      ? `${isSpeakingMode()?"口語模式(說)":"書寫模式(寫)"}｜${task.hanziSpeechEnabled?`逐項完整文字語音辨識｜每題 ${task.hanziRepeatCount} 次`:isHanziPracticeMode()?"開啟中英文書寫練習":"學生編號｜設備手寫輸入辨識｜結果回傳"}`
       : isClickMode()
       ? `點選模式(聽)｜同時 ${task.clickSimultaneousCount} 個文字項目｜每個文字 ${task.clickRepeatCount} 次｜每次最多 ${task.clickDisplaySeconds} 秒`
       : task.taskMode==="teaching"
@@ -1926,7 +1941,7 @@ async function loadTask(){
         : task.taskMode==="game"
           ? `多人尋物遊戲｜教師開始後，每位學生會收到不同的隨機物品順序${task.skipPhotoRecognition?"｜僅語音辨識":audioNote}`
           : `專案類型：${typeName}｜${isReadingMode()?"問答模式(讀)｜":""}${task.promptMode==="description"?"說明文字語音出題":"物品名稱語音出題"}${task.skipPhotoRecognition?"｜僅語音辨識":audioNote}｜順序：${task.targetClasses.join(" → ")}`;
-    if(isHanziMode()&&!task.hanziSpeechEnabled){
+    if(isHanziPracticeMode()){
       $("joinCard").classList.add("hidden");
       showHanziPracticePicker();
       setStatus("loadStatus","練習載入成功，請點選要練習的中文字或英文字母。","success");
@@ -2193,8 +2208,18 @@ function renderHanziQuestion(){
   const stageTitle=document.querySelector(".hanzi-stage-title");
   if(stageTitle)stageTitle.textContent=isSpeakingMode()?"請說出這個文字":"請完成這個文字";
   updateThumbnailElement("hanziTargetThumbnail",target,"文字練習題目縮圖");
-  $("hanziSpeechPanel").classList.remove("hidden");
-  setStatus("hanziStatus","請按下按鈕並完整念出畫面上的文字。");
+  $("hanziSpeechPanel").classList.toggle("hidden",!isSpeakingMode());
+  $("hanziWritingPanel").classList.toggle("hidden",isSpeakingMode());
+  if(isSpeakingMode()){
+    setStatus("hanziStatus","請按下按鈕並完整念出畫面上的文字。");
+  }else{
+    const input=$("hanziWritingInput");
+    input.value="";
+    input.disabled=false;
+    $("submitHanziWritingBtn").disabled=false;
+    setStatus("hanziStatus","請使用設備手寫鍵盤輸入畫面上的文字。");
+    setTimeout(()=>{if(!finished&&currentIndex<total)input.focus()},120);
+  }
   resetQuestionReminderForCurrentQuestion();
   scheduleQuestionAutoSpeech(()=>speakHanziPrompt(false,true),300);
 }
@@ -2211,6 +2236,60 @@ function speakHanziPrompt(showError=true,autoPlayback=false){
     if(primed)return primed;
   }
   return speakPlatformText(target,{rate:.82});
+}
+
+async function submitHanziWritingAnswer(){
+  if(!task||finished||isSpeakingMode()||currentIndex>=task.targetClasses.length)return;
+  const input=$("hanziWritingInput");
+  const button=$("submitHanziWritingBtn");
+  const entered=String(input.value||"").trim();
+  if(!entered){
+    setStatus("hanziStatus","請先使用設備手寫鍵盤輸入答案。","error");
+    input.focus();
+    return;
+  }
+  markQuestionPromptInteraction();
+  input.disabled=true;
+  button.disabled=true;
+  const target=String(task.targetClasses[currentIndex]||"");
+  attempts++;
+  if(normalizeSpeechText(entered)!==normalizeSpeechText(target)){
+    localIncorrectClasses.push(target);
+    consecutiveWrongAttempts++;
+    totalErrorCount++;
+    addItemError(target,"image");
+    playTaskErrorSound();
+    showCaptureFeedback("failure","書寫答錯了");
+    if(resultRef){
+      try{
+        await resultRef.update({
+          attempts,
+          errorCount:totalErrorCount,
+          itemErrorCounts:{...itemErrorCounts},
+          imageItemErrorCounts:{...imageItemErrorCounts},
+          audioItemErrorCounts:{...audioItemErrorCounts},
+          incorrectClasses:firebase.firestore.FieldValue.arrayUnion(target),
+          writingInputRecords:firebase.firestore.FieldValue.arrayUnion({target,input:entered,correct:false}),
+          updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+        });
+      }catch(e){console.warn("書寫錯誤紀錄失敗",e)}
+    }
+    if(consecutiveWrongAttempts>=5){
+      setStatus("hanziStatus","已連續答錯 5 次，即將進入下一題。","error");
+      await new Promise(resolve=>setTimeout(resolve,850));
+      await completeHanziCharacter(true);
+      return;
+    }
+    setStatus("hanziStatus",`書寫不正確，請再試一次（${consecutiveWrongAttempts}/5）。`,"error");
+    input.value="";
+    input.disabled=false;
+    button.disabled=false;
+    input.focus();
+    return;
+  }
+  playTaskSuccessSound();
+  showCaptureFeedback("success","書寫答對了");
+  await completeHanziCharacter();
 }
 
 async function saveHanziProgress(done=false){
@@ -4779,6 +4858,14 @@ $("captureBtn").onclick=captureAndRecognize;
 $("voiceRecognizeBtn").onclick=()=>{markQuestionPromptInteraction();return startOptionalAudioRecognition()};
 $("repeatHanziPromptBtn").onclick=()=>{markQuestionPromptInteraction();return speakHanziPrompt(true)};
 $("speakHanziBtn").onclick=()=>{markQuestionPromptInteraction();return recognizeHanziSpeech()};
+$("submitHanziWritingBtn").onclick=submitHanziWritingAnswer;
+$("hanziWritingInput").addEventListener("input",markQuestionPromptInteraction);
+$("hanziWritingInput").addEventListener("keydown",event=>{
+  if(event.key==="Enter"&&!event.isComposing&&event.keyCode!==229){
+    event.preventDefault();
+    submitHanziWritingAnswer();
+  }
+});
 $("hanziPicker").addEventListener("click",event=>{
   const button=event.target.closest("[data-hanzi]");if(!button)return;
   const character=String(button.dataset.hanzi||"");

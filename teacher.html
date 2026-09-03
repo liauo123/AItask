@@ -172,8 +172,12 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none}
 
       <section id="hanziModeCard" class="card modeCard hanziMode hidden">
         <h2>書寫模式(寫)</h2>
-        <div class="clickHint">中文字可逐字連結教育部筆順練習，英文字母可逐字連結英文描寫練習。</div>
+        <div class="clickHint">學生端設備需開啟手寫輸入。</div>
         <input id="hanziTaskTitle" placeholder="書寫模式(寫)名稱">
+        <div class="modeSettings">
+          <label class="modeSetting"><input id="hanziPracticeEnabled" type="checkbox">書寫練習</label>
+          <div class="clickHint" style="margin:0">中文字可逐字連結教育部筆順練習，英文字母可逐字連結英文描寫練習。</div>
+        </div>
         <input id="hanziSpeechRecognition" type="checkbox" class="hidden" aria-hidden="true">
         <input id="hanziRepeatCount" type="hidden" value="1">
         <output id="hanziRepeatCountValue" class="hidden">1 次</output>
@@ -345,6 +349,7 @@ function saveTeacherDraft(){
     gameShowNameText:$("gameShowNameText").checked,
     gameThumbnailHint:$("gameThumbnailHint").checked,
     hanziTaskTitle:$("hanziTaskTitle").value,
+    hanziPracticeEnabled:$("hanziPracticeEnabled").checked,
     hanziSpeechRecognition:false,
     hanziRepeatCount:1,
     speakingTaskTitle:$("speakingTaskTitle").value,
@@ -406,6 +411,7 @@ function restoreTeacherDraftBase(){
   $("gameShowNameText").checked=getSelectedRecognitionEngine()==="ocr"&&!!draft.gameShowNameText;
   $("gameThumbnailHint").checked=!!draft.gameThumbnailHint;
   $("hanziTaskTitle").value=String(draft.hanziTaskTitle||"");
+  $("hanziPracticeEnabled").checked=!!draft.hanziPracticeEnabled;
   $("hanziSpeechRecognition").checked=false;
   $("hanziRepeatCount").value="1";
   updateHanziRepeatLabel();
@@ -598,6 +604,7 @@ async function restoreTaskFromTaskList(taskId){
     if(taskMode==="game")$("gameTitle").value=String(task.title||"");
     if(taskMode==="hanzi"){
       $("hanziTaskTitle").value=String(task.title||"").replace(/^(?:國字|文字)練習：/,"");
+      $("hanziPracticeEnabled").checked=task.hanziPracticeEnabled===undefined?!task.hanziWritingEnabled:!!task.hanziPracticeEnabled;
       $("hanziSpeechRecognition").checked=false;
       $("hanziRepeatCount").value="1";
       updateHanziRepeatLabel();
@@ -1172,17 +1179,16 @@ async function createHanziModeQR(){
   const selectedTexts=getSelectedClassesInCurrentOrder();
   const hanziTexts=labels.length?selectedTexts:typedTexts;
   const chars=getHanziCharacters(hanziTexts);
+  const practiceEnabled=$("hanziPracticeEnabled").checked;
   const speechEnabled=false;
   const hanziRepeatCount=1;
   if(!title)return status("hanziStatus","請輸入書寫模式(寫)名稱。","err");
   if(!labels.length&&!hanziTexts.length)return status("hanziStatus","請先在上方輸入文字並按下「載入文字辨識」。","err");
   if(labels.length&&!hanziTexts.length)return status("hanziStatus","請至少勾選一個要出題的文字項目。","err");
-  if(!speechEnabled&&!chars.length)return status("hanziStatus","書寫練習內容需包含至少一個中文字或英文字母。","err");
+  if(practiceEnabled&&!chars.length)return status("hanziStatus","書寫練習內容需包含至少一個中文字或英文字母。","err");
   if(!user)return status("hanziStatus","請先登入教師帳號。","err");
-  const hanziQuestionSequence=speechEnabled
-    ? hanziTexts.flatMap(text=>Array(hanziRepeatCount).fill(text))
-    : [];
-  const targets=speechEnabled?hanziQuestionSequence:chars;
+  const hanziQuestionSequence=practiceEnabled?[]:[...hanziTexts];
+  const targets=practiceEnabled?chars:hanziQuestionSequence;
   $("createHanziBtn").disabled=true;
   status("hanziStatus","正在建立書寫模式(寫)…");
   try{
@@ -1199,7 +1205,8 @@ async function createHanziModeQR(){
       hanziText:hanziTexts.join("\n"),
       hanziTexts,
       hanziQuestionSequence,
-      hanziWritingEnabled:false,
+      hanziPracticeEnabled:practiceEnabled,
+      hanziWritingEnabled:!practiceEnabled,
       hanziSpeechEnabled:speechEnabled,
       hanziRepeatCount,
       speechRecognitionMode:"browser",
@@ -1208,10 +1215,12 @@ async function createHanziModeQR(){
       taskMode:"hanzi",
       maxPlayers:15,
       status:"active",
-      version:"3.3-hanzi-repeat-count",
+      version:"3.8-hanzi-writing-input",
       createdAt:firebase.firestore.FieldValue.serverTimestamp()
     });
-    const detail="學生可逐字選擇並開啟中文筆順或英文字母描寫練習。";
+    const detail=practiceEnabled
+      ? "學生可逐字選擇並開啟中文筆順或英文字母描寫練習。"
+      : "學生選擇編號後，使用設備手寫輸入；系統判斷正誤並回傳結果。";
     status("hanziStatus",`書寫模式(寫)建立成功！\n${detail}\nTask ID：${ref.id}`,"ok");
     showQR(ref.id,title);
   }catch(e){
@@ -1223,6 +1232,7 @@ async function createHanziModeQR(){
 
 $("createHanziBtn").onclick=createHanziModeQR;
 $("hanziRepeatCount").addEventListener("input",()=>{updateHanziRepeatLabel();scheduleTeacherDraftSave()});
+$("hanziPracticeEnabled").addEventListener("change",scheduleTeacherDraftSave);
 
 function updateSpeakingRepeatLabel(){
   $("speakingRepeatCountValue").textContent=$("speakingRepeatCount").value+" 次";
