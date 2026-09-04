@@ -19,7 +19,13 @@
 <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/speech-commands@0.4.0/dist/speech-commands.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/pinyin-pro@3.28.2/dist/index.js"></script>
+<!-- 中文發音比對元件：專案內檔案優先，外部 CDN 僅作備援。 -->
+<script src="./pinyin-pro.min.js"></script>
+<script>
+if(!window.pinyinPro){
+  document.write('<script src="https://cdn.jsdelivr.net/npm/pinyin-pro@3.28.2/dist/index.min.js"><\/script>');
+}
+</script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js"></script>
 
 <style>
@@ -1597,56 +1603,6 @@ function resetCurrentVerification(){
   restoreCaptureButtonForCurrentQuestion();
 }
 
-async function skipEvaluationQuestionAfterFiveWrong(){
-  if(!isEvaluationMode()||finished||currentIndex>=task.targetClasses.length)return false;
-  const item=task.targetClasses[currentIndex];
-  consecutiveWrongAttempts=0;
-  completed.push(item);
-  currentIndex++;
-  resetCurrentVerification();
-  renderTask();
-  if(currentIndex<task.targetClasses.length)prepareCurrentQuestionPrompt(true);
-  if(resultRef){
-    try{
-      await resultRef.update({
-        completedClasses:[...completed],
-        skippedClasses:firebase.firestore.FieldValue.arrayUnion(item),
-        progress:Math.round(completed.length/task.targetClasses.length*100),
-        attempts,
-        errorCount:totalErrorCount,
-        itemErrorCounts:{...itemErrorCounts},
-        imageItemErrorCounts:{...imageItemErrorCounts},
-        audioItemErrorCounts:{...audioItemErrorCounts},
-        status:currentIndex>=task.targetClasses.length?"completed":"inProgress",
-        updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
-        ...(currentIndex>=task.targetClasses.length?{completedAt:firebase.firestore.FieldValue.serverTimestamp()}:{})
-      });
-    }catch(e){console.warn("評量跳題紀錄失敗",e)}
-  }
-  if(currentIndex>=task.targetClasses.length){
-    finishTask();
-  }else{
-    setStatus("recognitionStatus",`「${item}」已連續答錯 5 次，已進入下一題。`,"error");
-  }
-  return true;
-}
-
-function continueEvaluationWithAudioAfterFivePhotoWrong(){
-  if(!isEvaluationMode()||!isOptionalAudioRequired()||finished||currentIndex>=task.targetClasses.length)return false;
-  consecutiveWrongAttempts=0;
-  photoRecognizing=false;
-  currentImagePassed=true;
-  currentImageConfidence=0;
-  currentImageEvidenceDataURL="";
-  updateVerificationUI();
-  const message="拍照辨識已連續答錯 5 次，請按麥克風按鈕進行語音辨識。";
-  $("imageOverlay").textContent=message;
-  lastImageOverlayText=message;
-  setStatus("recognitionStatus",message,"error");
-  setVoiceResult("請按按鈕並說出物品名稱。");
-  return true;
-}
-
 function updateVerificationUI(){
   const panel=$("audioVerification");
   const voiceButton=$("voiceRecognizeBtn");
@@ -2343,13 +2299,7 @@ async function submitHanziWritingAnswer(){
         });
       }catch(e){console.warn("書寫錯誤紀錄失敗",e)}
     }
-    if(consecutiveWrongAttempts>=5){
-      setStatus("hanziStatus","已連續答錯 5 次，即將進入下一題。","error");
-      await new Promise(resolve=>setTimeout(resolve,850));
-      await completeHanziCharacter(true);
-      return;
-    }
-    setStatus("hanziStatus",`書寫不正確，請再試一次（${consecutiveWrongAttempts}/5）。`,"error");
+    setStatus("hanziStatus",`書寫不正確，請再試一次（已答錯 ${consecutiveWrongAttempts} 次）。`,"error");
     input.value="";
     input.disabled=false;
     button.disabled=false;
@@ -2405,11 +2355,14 @@ function stopHanziSpeechRecognition(recognitionOverride=null,enableButton=true){
 }
 
 function recognizeHanziSpeech(){
+  const target=task.targetClasses[currentIndex];
+  if(requiresMandarinPinyin(target)&&!isPinyinLibraryReady()){
+    return setStatus("hanziStatus",getPinyinLibraryErrorMessage(),"error");
+  }
   const SpeechRecognition=getBrowserSpeechRecognitionConstructor();
   if(!SpeechRecognition)return setStatus("hanziStatus","此瀏覽器不支援語音辨識，請改用最新版 Chrome、Edge 或 Safari。","error");
   stopPlatformSpeech();
   if(hanziSpeechRecognition)stopHanziSpeechRecognition(hanziSpeechRecognition);
-  const target=task.targetClasses[currentIndex];
   const recognition=rememberSpeechRecognition(new SpeechRecognition());hanziSpeechRecognition=recognition;hanziSpeechStarting=true;microphoneStartRequestedAt=Date.now();recognition.lang=getSpeechRecognitionLanguage(target);recognition.interimResults=false;recognition.maxAlternatives=3;
   $("speakHanziBtn").disabled=true;setStatus("hanziStatus","正在聆聽，請念出畫面上的字…");
   recognition.onstart=()=>{
@@ -2440,13 +2393,7 @@ function recognizeHanziSpeech(){
             });
           }catch(e){console.warn("國字語音錯誤紀錄失敗",e)}
         }
-        if(consecutiveWrongAttempts>=5){
-          setStatus("hanziStatus","已連續答錯 5 次，即將進入下一題。","error");
-          await new Promise(resolve=>setTimeout(resolve,850));
-          await completeHanziCharacter(true);
-          return;
-        }
-        setStatus("hanziStatus",`聽到「${alternatives[0]||""}」，請再試一次（${consecutiveWrongAttempts}/5）。`,"error");
+        setStatus("hanziStatus",`聽到「${alternatives[0]||""}」，請再試一次（已答錯 ${consecutiveWrongAttempts} 次）。`,"error");
         return;
       }
       playTaskSuccessSound();showCaptureFeedback("success","語音答對了");await completeHanziCharacter();
@@ -3170,10 +3117,25 @@ function getBrowserSpeechRecognitionConstructor(){
   return window.SpeechRecognition||window.webkitSpeechRecognition||null;
 }
 
+function isPinyinLibraryReady(){
+  return !!(window.pinyinPro&&typeof window.pinyinPro.pinyin==="function");
+}
+
+function requiresMandarinPinyin(target){
+  return /\p{Script=Han}/u.test(String(target||""));
+}
+
+function getPinyinLibraryErrorMessage(){
+  return "中文發音比對元件載入失敗，請確認網路後重新整理頁面。";
+}
+
 function validateBrowserSpeechRecognition(){
   const required=getEffectiveAudioRequiredClasses();
   if(required.length&&!getBrowserSpeechRecognitionConstructor()){
     throw new Error("此瀏覽器不支援語音辨識，請使用最新版 Chrome、Edge 或 Safari 開啟學生端。");
+  }
+  if(required.some(requiresMandarinPinyin)&&!isPinyinLibraryReady()){
+    throw new Error(getPinyinLibraryErrorMessage());
   }
 }
 
@@ -3531,8 +3493,6 @@ async function captureAndRecognize(){
       totalErrorCount++;
       addItemError(target,"image");
       if(isEvaluationMode())consecutiveWrongAttempts++;
-      const shouldSkipQuestion=isEvaluationMode()&&consecutiveWrongAttempts>=5;
-      const shouldContinueToAudio=shouldSkipQuestion&&isOptionalAudioRequired();
       showCaptureFeedback("failure","辨識失敗");
       playTaskErrorSound();
 
@@ -3562,29 +3522,13 @@ async function captureAndRecognize(){
       lastImageOverlayText=$("imageOverlay").textContent;
       setStatus(
         "recognitionStatus",
-        shouldContinueToAudio
-          ?"拍照辨識已連續答錯 5 次，即將進行語音辨識。"
-          :shouldSkipQuestion
-          ?"已連續答錯 5 次，即將進入下一題。"
-          :isAdvancedMode()
+        isAdvancedMode()
           ?"辨識錯誤，請再聽一次語音說明後重新拍照。"
           :isOcrRecognition()
             ?"沒有讀到指定文字，請靠近、對準後重新拍照。"
             :"辨識錯誤，請將指定物品放入框內後重新拍照。",
         "error"
       );
-
-      if(shouldSkipQuestion){
-        setTimeout(async()=>{
-          photoRecognizing=false;
-          if(shouldContinueToAudio){
-            continueEvaluationWithAudioAfterFivePhotoWrong();
-          }else{
-            await skipEvaluationQuestionAfterFiveWrong();
-          }
-        },850);
-        return;
-      }
 
       setTimeout(()=>{
         if(!finished){
@@ -3888,7 +3832,7 @@ function getApproximateEnglishSoundTokens(text){
 }
 
 function normalizeMandarinSpeechToken(token){
-  return normalizeSpeechText(token).replace(/[23]$/,"23");
+  return normalizeSpeechText(token);
 }
 
 function normalizeStandardMandarinNearSoundToken(token){
@@ -4106,7 +4050,6 @@ async function recordOptionalAudioFailure(target,countTowardLimit=true,inputText
   }
   if(isEvaluationMode()&&countTowardLimit){
     consecutiveWrongAttempts++;
-    if(consecutiveWrongAttempts>=5)return skipEvaluationQuestionAfterFiveWrong();
   }
   return false;
 }
@@ -4121,6 +4064,14 @@ async function startOptionalAudioRecognition(){
     paused
   )return;
 
+  const target=currentTarget();
+  if(requiresMandarinPinyin(target)&&!isPinyinLibraryReady()){
+    setVoiceResult(getPinyinLibraryErrorMessage(),"error");
+    showCaptureFeedback("failure","元件未載入");
+    playTaskErrorSound();
+    return;
+  }
+
   const SpeechRecognition=getBrowserSpeechRecognitionConstructor();
   if(!SpeechRecognition){
     setVoiceResult("此瀏覽器不支援語音辨識，請使用最新版 Chrome、Edge 或 Safari。","error");
@@ -4130,7 +4081,6 @@ async function startOptionalAudioRecognition(){
   }
 
   stopPlatformSpeech();
-  const target=currentTarget();
   const recognition=rememberSpeechRecognition(new SpeechRecognition());
   browserSpeechRecognition=recognition;
   optionalAudioListening=true;
