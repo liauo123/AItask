@@ -58,15 +58,20 @@ button{min-height:50px;border:0;border-radius:15px;padding:0 16px;cursor:pointer
 .row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
 .recognition-actions{display:flex;justify-content:center;align-items:center}
 .recognition-actions button{width:min(100%,320px);flex:0 1 320px}
-.round-action-btn{width:64px;height:64px;min-height:64px;border-radius:50%;padding:0;font-size:30px;display:grid;place-items:center;line-height:1}
+.round-action-btn{position:relative;width:64px;height:64px;min-height:64px;border-radius:50%;padding:0;font-size:30px;display:grid;place-items:center;line-height:1}
 .recognition-actions .round-action-btn{width:64px;height:64px;min-height:64px;flex:0 0 64px;padding:0;font-size:30px}.hanzi-speech .round-action-btn{margin:12px auto 0}.advanced-prompt-speaker{flex:0 0 46px}
 .recognition-actions .mic-action-btn,.recognition-actions .camera-action-btn,.hanzi-speech .mic-action-btn{width:96px;height:96px;min-height:96px;flex:0 0 96px;font-size:45px;border-width:3px;transition:transform .1s ease,box-shadow .1s ease,filter .1s ease}
 .mic-action-btn{background:linear-gradient(145deg,#fff8f9 0%,#fecdd3 55%,#fda4af 100%);color:#be123c;border:3px solid #fb7185;box-shadow:0 11px 0 #be123c,0 17px 25px rgba(190,24,93,.34),inset 0 3px 5px rgba(255,255,255,.9)}
 .mic-action-btn:active{background:linear-gradient(145deg,#ffe4e6,#fda4af);transform:translateY(9px) scale(.96);box-shadow:0 2px 0 #9f1239,0 5px 9px rgba(190,24,93,.24),inset 0 2px 5px rgba(159,18,57,.18);filter:brightness(.96)}
 .camera-action-btn{background:linear-gradient(145deg,#fffef2 0%,#fde68a 55%,#facc15 100%);color:#92400e;border:3px solid #eab308;box-shadow:0 11px 0 #b45309,0 17px 25px rgba(180,83,9,.34),inset 0 3px 5px rgba(255,255,255,.9)}
 .camera-action-btn:active{background:linear-gradient(145deg,#fef9c3,#facc15);transform:translateY(9px) scale(.96);box-shadow:0 2px 0 #92400e,0 5px 9px rgba(180,83,9,.24),inset 0 2px 5px rgba(146,64,14,.18);filter:brightness(.96)}
-.mic-action-btn.is-listening{animation:microphoneListeningPulse 1.15s ease-in-out infinite}
-@keyframes microphoneListeningPulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.12)}}
+.mic-action-btn{--listening-color:#e11d48;--listening-soft:rgba(225,29,72,.34);--listening-base-shadow:#9f1239}
+.mic-action-btn.is-listening{z-index:2;animation:microphoneListeningGlow .82s ease-in-out infinite alternate}
+.mic-action-btn.is-listening:active{animation:none}
+.mic-action-btn.is-listening::before{content:"";position:absolute;inset:-13px;border:5px solid var(--listening-color);border-radius:50%;pointer-events:none;animation:microphoneListeningRing 1.05s ease-out infinite}
+.mic-action-btn.is-listening::after{content:"聆聽中";position:absolute;left:50%;top:calc(100% + 18px);transform:translateX(-50%);min-width:78px;padding:6px 9px;border-radius:999px;background:var(--listening-color);color:#fff;font-size:14px;font-weight:1000;line-height:1;white-space:nowrap;box-shadow:0 5px 12px var(--listening-soft);pointer-events:none}
+@keyframes microphoneListeningGlow{from{filter:brightness(1);box-shadow:0 9px 0 var(--listening-base-shadow),0 14px 20px var(--listening-soft),0 0 0 4px rgba(255,255,255,.9)}to{filter:brightness(1.18);box-shadow:0 9px 0 var(--listening-base-shadow),0 17px 29px var(--listening-soft),0 0 0 9px var(--listening-soft)}}
+@keyframes microphoneListeningRing{0%{opacity:.95;transform:scale(.82)}75%,100%{opacity:0;transform:scale(1.28)}}
 .mic-action-btn:disabled,.camera-action-btn:disabled{opacity:.55;transform:none;box-shadow:0 4px 0 #94a3b8,0 7px 12px rgba(15,23,42,.14);cursor:not-allowed}
 
 .number-select-title{
@@ -281,6 +286,7 @@ body[data-mode-theme="speaking"] .hanzi-stage-title{color:#1d4ed8}
 body[data-mode-theme="speaking"] .hanzi-note{color:#1e40af}
 body[data-mode-theme="speaking"] .hanzi-speech{background:#dbeafe}
 body[data-mode-theme="speaking"] .mic-action-btn{background:linear-gradient(145deg,#f8fbff 0%,#bfdbfe 55%,#93c5fd 100%);color:#1d4ed8;border-color:#60a5fa;box-shadow:0 11px 0 #1d4ed8,0 17px 25px rgba(37,99,235,.34),inset 0 3px 5px rgba(255,255,255,.9)}
+body[data-mode-theme="speaking"] .mic-action-btn{--listening-color:#2563eb;--listening-soft:rgba(37,99,235,.38);--listening-base-shadow:#1e40af}
 body[data-mode-theme="speaking"] .mic-action-btn:active{background:linear-gradient(145deg,#dbeafe,#93c5fd);transform:translateY(9px) scale(.96);box-shadow:0 2px 0 #1e40af,0 5px 9px rgba(37,99,235,.24),inset 0 2px 5px rgba(30,64,175,.18)}
 .teaching-camera-card .overlay{left:8px;right:8px;bottom:8px}
 
