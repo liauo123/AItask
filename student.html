@@ -60,10 +60,11 @@ button{min-height:50px;border:0;border-radius:15px;padding:0 16px;cursor:pointer
 .recognition-actions button{width:min(100%,320px);flex:0 1 320px}
 .round-action-btn{width:64px;height:64px;min-height:64px;border-radius:50%;padding:0;font-size:30px;display:grid;place-items:center;line-height:1}
 .recognition-actions .round-action-btn{width:64px;height:64px;min-height:64px;flex:0 0 64px;padding:0;font-size:30px}.hanzi-speech .round-action-btn{margin:12px auto 0}.advanced-prompt-speaker{flex:0 0 46px}
-.mic-action-btn{background:linear-gradient(145deg,#fff1f2,#fecdd3);color:#be123c;border:2px solid #fda4af;box-shadow:0 7px 0 #e11d48,0 11px 19px rgba(190,24,93,.24)}
-.mic-action-btn:active{background:linear-gradient(145deg,#ffe4e6,#fda4af);transform:translateY(5px);box-shadow:0 2px 0 #be123c,0 5px 10px rgba(190,24,93,.2)}
-.camera-action-btn{background:linear-gradient(145deg,#fffde7,#fde68a);color:#92400e;border:2px solid #facc15;box-shadow:0 7px 0 #d97706,0 11px 19px rgba(180,83,9,.24)}
-.camera-action-btn:active{background:linear-gradient(145deg,#fef9c3,#fcd34d);transform:translateY(5px);box-shadow:0 2px 0 #b45309,0 5px 10px rgba(180,83,9,.2)}
+.recognition-actions .mic-action-btn,.recognition-actions .camera-action-btn,.hanzi-speech .mic-action-btn{width:96px;height:96px;min-height:96px;flex:0 0 96px;font-size:45px;border-width:3px;transition:transform .1s ease,box-shadow .1s ease,filter .1s ease}
+.mic-action-btn{background:linear-gradient(145deg,#fff8f9 0%,#fecdd3 55%,#fda4af 100%);color:#be123c;border:3px solid #fb7185;box-shadow:0 11px 0 #be123c,0 17px 25px rgba(190,24,93,.34),inset 0 3px 5px rgba(255,255,255,.9)}
+.mic-action-btn:active{background:linear-gradient(145deg,#ffe4e6,#fda4af);transform:translateY(9px) scale(.96);box-shadow:0 2px 0 #9f1239,0 5px 9px rgba(190,24,93,.24),inset 0 2px 5px rgba(159,18,57,.18);filter:brightness(.96)}
+.camera-action-btn{background:linear-gradient(145deg,#fffef2 0%,#fde68a 55%,#facc15 100%);color:#92400e;border:3px solid #eab308;box-shadow:0 11px 0 #b45309,0 17px 25px rgba(180,83,9,.34),inset 0 3px 5px rgba(255,255,255,.9)}
+.camera-action-btn:active{background:linear-gradient(145deg,#fef9c3,#facc15);transform:translateY(9px) scale(.96);box-shadow:0 2px 0 #92400e,0 5px 9px rgba(180,83,9,.24),inset 0 2px 5px rgba(146,64,14,.18);filter:brightness(.96)}
 .mic-action-btn:disabled,.camera-action-btn:disabled{opacity:.55;transform:none;box-shadow:0 4px 0 #94a3b8,0 7px 12px rgba(15,23,42,.14);cursor:not-allowed}
 
 .number-select-title{
@@ -277,8 +278,8 @@ body[data-mode-theme="speaking"] .hanzi-question,
 body[data-mode-theme="speaking"] .hanzi-stage-title{color:#1d4ed8}
 body[data-mode-theme="speaking"] .hanzi-note{color:#1e40af}
 body[data-mode-theme="speaking"] .hanzi-speech{background:#dbeafe}
-body[data-mode-theme="speaking"] .mic-action-btn{background:linear-gradient(145deg,#eff6ff,#bfdbfe);color:#1d4ed8;border-color:#93c5fd;box-shadow:0 7px 0 #2563eb,0 11px 19px rgba(37,99,235,.24)}
-body[data-mode-theme="speaking"] .mic-action-btn:active{background:linear-gradient(145deg,#dbeafe,#93c5fd);box-shadow:0 2px 0 #1d4ed8,0 5px 10px rgba(37,99,235,.2)}
+body[data-mode-theme="speaking"] .mic-action-btn{background:linear-gradient(145deg,#f8fbff 0%,#bfdbfe 55%,#93c5fd 100%);color:#1d4ed8;border-color:#60a5fa;box-shadow:0 11px 0 #1d4ed8,0 17px 25px rgba(37,99,235,.34),inset 0 3px 5px rgba(255,255,255,.9)}
+body[data-mode-theme="speaking"] .mic-action-btn:active{background:linear-gradient(145deg,#dbeafe,#93c5fd);transform:translateY(9px) scale(.96);box-shadow:0 2px 0 #1e40af,0 5px 9px rgba(37,99,235,.24),inset 0 2px 5px rgba(30,64,175,.18)}
 .teaching-camera-card .overlay{left:8px;right:8px;bottom:8px}
 
 /* iPhone／iPad 響應式顯示：避免相機區過高把按鈕推出畫面 */
@@ -3831,6 +3832,16 @@ function getApproximateEnglishSoundTokens(text){
   return words.map(word=>`${approximateEnglishConsonantKey(word)}:${approximateEnglishVowelKey(word)}`);
 }
 
+function getApproximateEnglishConsonantTokens(text){
+  const words=String(text||"").normalize("NFKC").toLowerCase().match(/[a-z]+(?:'[a-z]+)?/g)||[];
+  return words.map(approximateEnglishConsonantKey).filter(Boolean);
+}
+
+function getApproximateEnglishVowelTokens(text){
+  const words=String(text||"").normalize("NFKC").toLowerCase().match(/[a-z]+(?:'[a-z]+)?/g)||[];
+  return words.map(approximateEnglishVowelKey).filter(Boolean);
+}
+
 function normalizeMandarinSpeechToken(token){
   return normalizeSpeechText(token);
 }
@@ -3875,6 +3886,61 @@ function mandarinVowelKey(token){
   else if(finalPart==="ui")finalPart="uei";
   else if(finalPart==="un")finalPart="uen";
   return finalPart||"NONE";
+}
+
+const MEDIUM_MANDARIN_CONSONANT_GROUPS=[
+  new Set(["b","p","m"]),
+  new Set(["d","t"]),
+  new Set(["n","l"]),
+  new Set(["g","k","h"]),
+  new Set(["j","q","x"]),
+  new Set(["zh","ch","sh","r"]),
+  new Set(["z","c","s"])
+];
+const MEDIUM_MANDARIN_CROSS_PAIRS=new Set(["z|zh","c|ch","s|sh"]);
+
+function mediumMandarinConsonantsMatch(left,right){
+  if(!left||!right)return false;
+  if(left===right)return true;
+  if(MEDIUM_MANDARIN_CONSONANT_GROUPS.some(group=>group.has(left)&&group.has(right)))return true;
+  return MEDIUM_MANDARIN_CROSS_PAIRS.has([left,right].sort().join("|"));
+}
+
+function mediumMandarinVowelKey(token){
+  const finalPart=mandarinVowelKey(token);
+  return ({eng:"en",ang:"an",ing:"in"})[finalPart]||finalPart;
+}
+
+function getMediumMandarinSyllables(text){
+  if(!window.pinyinPro||typeof window.pinyinPro.pinyin!=="function")return [];
+  try{
+    return window.pinyinPro.pinyin(String(text||""),{
+      toneType:"num",
+      type:"array"
+    }).map(token=>({
+      consonant:mandarinConsonantKey(token),
+      vowel:mediumMandarinVowelKey(token)
+    })).filter(item=>item.consonant&&item.vowel);
+  }catch(e){
+    console.warn("中文中度放寬轉換失敗",e);
+    return [];
+  }
+}
+
+function containsMediumMandarinSequence(source,target,matchMode="both"){
+  if(!target.length||source.length<target.length)return false;
+  for(let i=0;i<=source.length-target.length;i++){
+    const matched=target.every((targetItem,index)=>{
+      const sourceItem=source[i+index];
+      const consonantMatched=mediumMandarinConsonantsMatch(sourceItem.consonant,targetItem.consonant);
+      const vowelMatched=sourceItem.vowel===targetItem.vowel;
+      if(matchMode==="consonant")return consonantMatched;
+      if(matchMode==="vowel")return vowelMatched;
+      return consonantMatched&&vowelMatched;
+    });
+    if(matched)return true;
+  }
+  return false;
 }
 
 function approximateMandarinConsonantKey(token){
@@ -3976,7 +4042,19 @@ function speechMatchesTarget(spoken,target){
     const spokenPhonetics=getEnglishPhoneticTokens(spoken);
     const targetPhonetics=getEnglishPhoneticTokens(target);
     if(containsTokenSequence(spokenPhonetics,targetPhonetics))return true;
+    if(containsTokenSequence(
+      getApproximateEnglishSoundTokens(spoken),
+      getApproximateEnglishSoundTokens(target)
+    ))return true;
     if(!task?.relaxedSpeechRecognition)return false;
+    if(containsTokenSequence(
+      getApproximateEnglishConsonantTokens(spoken),
+      getApproximateEnglishConsonantTokens(target)
+    ))return true;
+    if(containsTokenSequence(
+      getApproximateEnglishVowelTokens(spoken),
+      getApproximateEnglishVowelTokens(target)
+    ))return true;
     if(containsTokenSequence(
       getRelaxedEnglishConsonantTokens(spoken),
       getRelaxedEnglishConsonantTokens(target)
@@ -3997,7 +4075,12 @@ function speechMatchesTarget(spoken,target){
     getStandardMandarinNearSoundTokens(spoken),
     getStandardMandarinNearSoundTokens(target)
   ))return true;
+  const spokenMediumSyllables=getMediumMandarinSyllables(spoken);
+  const targetMediumSyllables=getMediumMandarinSyllables(target);
+  if(containsMediumMandarinSequence(spokenMediumSyllables,targetMediumSyllables))return true;
   if(!task?.relaxedSpeechRecognition)return false;
+  if(containsMediumMandarinSequence(spokenMediumSyllables,targetMediumSyllables,"consonant"))return true;
+  if(containsMediumMandarinSequence(spokenMediumSyllables,targetMediumSyllables,"vowel"))return true;
   if(containsTokenSequence(getMandarinConsonantTokens(spoken),getMandarinConsonantTokens(target)))return true;
   if(containsTokenSequence(getMandarinVowelTokens(spoken),getMandarinVowelTokens(target)))return true;
   return containsTokenSequence(
