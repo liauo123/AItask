@@ -183,7 +183,7 @@ function recognitionEngineName(engine){
 }
 function speechRecognitionStandardInfo(task){
   const standard=task&&task.relaxedSpeechRecognition?"放寬（子音或母音符合即可）":"一般標準";
-  const fuzzy=task&&task.fuzzySpeechRecognition?"開啟（回答可多說或少說不影響語意的助詞、語氣詞、連接詞及英文功能詞）":"關閉";
+  const fuzzy=task&&task.fuzzySpeechRecognition?"開啟（日常生活近義詞、語意關鍵詞及可忽略功能詞）":"關閉";
   return `<div class="meta">語音辨識標準：${standard}</div><div class="meta">語音模糊辨識：${fuzzy}</div>`;
 }
 
