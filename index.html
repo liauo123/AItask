@@ -95,6 +95,9 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none}
 .speakingTitleRow h2{margin:0}
 .relaxedSpeechSetting{display:flex;align-items:center;justify-content:flex-end;gap:7px;color:#1d4ed8;font-size:13px;font-weight:900;line-height:1.45;cursor:pointer;text-align:right}
 .relaxedSpeechSetting input{width:auto;margin:0;accent-color:#2563eb;flex:0 0 auto}
+#createTaskCard .relaxedSpeechSetting{color:#166534}#createTaskCard .relaxedSpeechSetting input{accent-color:#16a34a}
+.readingMode .relaxedSpeechSetting{color:#0e7490}.readingMode .relaxedSpeechSetting input{accent-color:#0891b2}
+.gameMode .relaxedSpeechSetting{color:#6d28d9}.gameMode .relaxedSpeechSetting input{accent-color:#7c3aed}
 .hanziPracticeSetting{color:#991b1b}
 .hanziPracticeSetting input{width:auto;margin:0;accent-color:#dc2626;flex:0 0 auto}
 .hanziMode .modeSettings{border-color:#fda4af;background:rgba(255,241,242,.78)}
@@ -216,7 +219,10 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none}
       </section>
 
       <section id="createTaskCard" class="card modeCard hidden">
-        <h2>拍照辨識模式</h2>
+        <div class="speakingTitleRow">
+          <h2>拍照辨識模式</h2>
+          <label class="relaxedSpeechSetting"><input id="evaluationRelaxedSpeechRecognition" type="checkbox">放寬語音辨識標準</label>
+        </div>
         <div class="modeHint">需配合載入文字或圖片方式，使用拍照功能進行文字或圖片(實物)辨識，可勾選下列選項增加功能。</div>
         <input id="taskTitle" placeholder="拍照辨識模式名稱">
         <div class="modeSettings">
@@ -231,7 +237,10 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none}
       </section>
 
       <section id="readingModeCard" class="card modeCard readingMode hidden">
-        <h2>問答模式(讀)</h2>
+        <div class="speakingTitleRow">
+          <h2>問答模式(讀)</h2>
+          <label class="relaxedSpeechSetting"><input id="readingRelaxedSpeechRecognition" type="checkbox">放寬語音辨識標準</label>
+        </div>
         <div class="modeHint">每一個勾選的文字項目，需填寫說明文字才會成為一題完整語音回答辨識。</div>
         <input id="readingTitle" placeholder="問答模式(讀)名稱">
         <input id="readingDescriptionPrompt" type="checkbox" class="hidden" checked aria-hidden="true">
@@ -249,7 +258,10 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none}
       </section>
 
       <section id="gameModeCard" class="card modeCard gameMode hidden">
-        <h2>多人遊戲模式</h2>
+        <div class="speakingTitleRow">
+          <h2>多人遊戲模式</h2>
+          <label class="relaxedSpeechSetting"><input id="gameRelaxedSpeechRecognition" type="checkbox">放寬語音辨識標準</label>
+        </div>
         <div class="gameHint">學生掃描 QR、選擇號碼並等待教師同意；教師統一開始後，依拍照辨識或語音辨識回答，完成順序即時排名。</div>
         <input id="gameTitle" placeholder="遊戲名稱或題目名稱">
         <div class="modeSettings">
@@ -337,11 +349,13 @@ function saveTeacherDraft(){
     gameTitle:$("gameTitle").value,
     evaluationDescriptionPrompt:$("evaluationDescriptionPrompt").checked,
     evaluationSpeechRecognition:$("evaluationSpeechRecognition").checked,
+    evaluationRelaxedSpeechRecognition:$("evaluationRelaxedSpeechRecognition").checked,
     evaluationSkipPhotoRecognition:$("evaluationSkipPhotoRecognition").checked,
     evaluationShowNameText:$("evaluationShowNameText").checked,
     evaluationThumbnailHint:$("evaluationThumbnailHint").checked,
     gameDescriptionPrompt:$("gameDescriptionPrompt").checked,
     gameSpeechRecognition:$("gameSpeechRecognition").checked,
+    gameRelaxedSpeechRecognition:$("gameRelaxedSpeechRecognition").checked,
     gameSkipPhotoRecognition:$("gameSkipPhotoRecognition").checked,
     gameShowNameText:$("gameShowNameText").checked,
     gameThumbnailHint:$("gameThumbnailHint").checked,
@@ -353,6 +367,7 @@ function saveTeacherDraft(){
     speakingRepeatCount:Number($("speakingRepeatCount").value||1),
     relaxedSpeechRecognition:$("relaxedSpeechRecognition").checked,
     readingTitle:$("readingTitle").value,
+    readingRelaxedSpeechRecognition:$("readingRelaxedSpeechRecognition").checked,
     readingDescriptionPrompt:$("readingDescriptionPrompt").checked,
     readingThumbnailHint:$("readingThumbnailHint").checked,
     clickTitle:$("clickTitle").value,
@@ -397,12 +412,14 @@ function restoreTeacherDraftBase(){
   $("gameTitle").value=String(draft.gameTitle||"");
   $("evaluationDescriptionPrompt").checked=!!draft.evaluationDescriptionPrompt;
   $("evaluationSpeechRecognition").checked=!!draft.evaluationSpeechRecognition;
+  $("evaluationRelaxedSpeechRecognition").checked=!!draft.evaluationRelaxedSpeechRecognition;
   $("evaluationSkipPhotoRecognition").checked=getSelectedRecognitionEngine()==="ocr"&&!!draft.evaluationSkipPhotoRecognition;
   if($("evaluationSkipPhotoRecognition").checked)$("evaluationSpeechRecognition").checked=true;
   $("evaluationShowNameText").checked=getSelectedRecognitionEngine()==="ocr"&&!!draft.evaluationShowNameText;
   $("evaluationThumbnailHint").checked=!!draft.evaluationThumbnailHint;
   $("gameDescriptionPrompt").checked=!!draft.gameDescriptionPrompt;
   $("gameSpeechRecognition").checked=!!draft.gameSpeechRecognition;
+  $("gameRelaxedSpeechRecognition").checked=!!draft.gameRelaxedSpeechRecognition;
   $("gameSkipPhotoRecognition").checked=getSelectedRecognitionEngine()==="ocr"&&!!draft.gameSkipPhotoRecognition;
   if($("gameSkipPhotoRecognition").checked)$("gameSpeechRecognition").checked=true;
   $("gameShowNameText").checked=getSelectedRecognitionEngine()==="ocr"&&!!draft.gameShowNameText;
@@ -421,6 +438,7 @@ function restoreTeacherDraftBase(){
   $("readingDescriptionPrompt").checked=true;
   $("readingThumbnailHint").checked=true;
   $("readingSpeechRecognition").checked=true;
+  $("readingRelaxedSpeechRecognition").checked=!!draft.readingRelaxedSpeechRecognition;
   $("clickTitle").value=String(draft.clickTitle||"");
   $("clickDisplaySeconds").value=String(Math.min(8,Math.max(3,Number(draft.clickDisplaySeconds||5))));
   $("clickRepeatCount").value=String(Math.min(5,Math.max(3,Number(draft.clickRepeatCount||3))));
@@ -594,7 +612,10 @@ async function restoreTaskFromTaskList(taskId){
       ? task.targetClasses.join("\n")
       : "";
     syncRecognitionEngineUI();
-    $("relaxedSpeechRecognition").checked=!!task.relaxedSpeechRecognition;
+    $("relaxedSpeechRecognition").checked=taskMode==="speaking"&&!!task.relaxedSpeechRecognition;
+    $("readingRelaxedSpeechRecognition").checked=taskMode==="reading"&&!!task.relaxedSpeechRecognition;
+    $("evaluationRelaxedSpeechRecognition").checked=taskMode==="evaluation"&&!!task.relaxedSpeechRecognition;
+    $("gameRelaxedSpeechRecognition").checked=taskMode==="game"&&!!task.relaxedSpeechRecognition;
     if(taskMode==="teaching")$("teachingTitle").value=String(task.title||"");
     if(taskMode==="evaluation")$("taskTitle").value=String(task.title||"");
     if(taskMode==="advanced")$("advancedTitle").value=String(task.title||"");
@@ -902,8 +923,8 @@ function getAudioTargets(mode,selectedTargets){
     return selectedSet.has(item.dataset.label)&&checkbox&&checkbox.checked;
   }).map(item=>item.dataset.label);
 }
-function getRecognitionTaskFields(){
-  const relaxedSpeechRecognition=!!$("relaxedSpeechRecognition").checked;
+function getRecognitionTaskFields(_targets,relaxedSpeechRecognition=false){
+  relaxedSpeechRecognition=!!relaxedSpeechRecognition;
   if(getSelectedRecognitionEngine()==="ocr"){
     return {
       recognitionEngine:"ocr",
@@ -949,7 +970,7 @@ async function createTeachingModeQR(){
       teacherEmail:user.email||"",
       title:teachingTitle,
       modelURL:modelURL,
-      ...getRecognitionTaskFields(labels),
+      ...getRecognitionTaskFields(labels,false),
       targetClasses:[...labels],
       classDescriptions:getClassDescriptions(false),
       classThumbnails:getClassThumbnails(false),
@@ -1016,7 +1037,7 @@ async function createAdvancedEvaluationQR(){
       teacherEmail:user.email||"",
       title,
       modelURL,
-      ...getRecognitionTaskFields(targets),
+      ...getRecognitionTaskFields(targets,false),
       targetClasses:targets,
       classDescriptions:getClassDescriptions(false),
       classThumbnails:getClassThumbnails(false),
@@ -1073,7 +1094,7 @@ async function createGameModeQR(){
       teacherEmail:user.email||"",
       title,
       modelURL,
-      ...getRecognitionTaskFields(targets),
+      ...getRecognitionTaskFields(targets,$("gameRelaxedSpeechRecognition").checked),
       targetClasses:targets,
       classDescriptions:getClassDescriptions(false),
       classThumbnails:getClassThumbnails(false),
@@ -1132,7 +1153,7 @@ async function createClickModeQR(){
       teacherEmail:user.email||"",
       title,
       modelURL,
-      ...getRecognitionTaskFields(targets),
+      ...getRecognitionTaskFields(targets,false),
       targetClasses:targets,
       classDescriptions:getClassDescriptions(false),
       classThumbnails:getClassThumbnails(false),
@@ -1300,7 +1321,7 @@ $("createBtn").onclick=async()=>{
       teacherEmail:user.email||"",
       title,
       modelURL,
-      ...getRecognitionTaskFields(targets),
+      ...getRecognitionTaskFields(targets,$("evaluationRelaxedSpeechRecognition").checked),
       targetClasses:targets,
       classDescriptions:getClassDescriptions(false),
       classThumbnails:getClassThumbnails(false),
@@ -1343,7 +1364,7 @@ $("createReadingBtn").onclick=async()=>{
   try{
     const ref=await db.collection("tasks").add({
       teacherId:user.uid,teacherEmail:user.email||"",title,modelURL,
-      ...getRecognitionTaskFields(targets),targetClasses:targets,
+      ...getRecognitionTaskFields(targets,$("readingRelaxedSpeechRecognition").checked),targetClasses:targets,
       classDescriptions:getClassDescriptions(false),classThumbnails:getClassThumbnails(false),
       audioRequiredClasses:[...targets],promptMode,speechRecognitionEnabled:true,
       skipPhotoRecognition:true,showNameText:false,showThumbnailHint,
@@ -1363,7 +1384,9 @@ function studentURL(id){const base=new URL("student.html",location.href).toStrin
 ["modelURL","ocrKeywords","teachingTitle","taskTitle","advancedTitle","gameTitle","clickTitle","hanziTaskTitle","speakingTaskTitle","readingTitle"].forEach(id=>{
   $(id).addEventListener("input",scheduleTeacherDraftSave);
 });
-$("relaxedSpeechRecognition").addEventListener("change",scheduleTeacherDraftSave);
+["relaxedSpeechRecognition","readingRelaxedSpeechRecognition","evaluationRelaxedSpeechRecognition","gameRelaxedSpeechRecognition"].forEach(id=>{
+  $(id).addEventListener("change",scheduleTeacherDraftSave);
+});
 $("recognitionEngine").addEventListener("change",()=>{
   model=null;modelURL="";labels=[];classThumbnails={};
   $("classes").innerHTML="";

@@ -4077,10 +4077,6 @@ function speechMatchesTarget(spoken,target){
     const spokenPhonetics=getEnglishPhoneticTokens(spoken);
     const targetPhonetics=getEnglishPhoneticTokens(target);
     if(containsTokenSequence(spokenPhonetics,targetPhonetics))return true;
-    if(containsTokenSequence(
-      getApproximateEnglishSoundTokens(spoken),
-      getApproximateEnglishSoundTokens(target)
-    ))return true;
     if(!task?.relaxedSpeechRecognition)return false;
     if(containsTokenSequence(
       getApproximateEnglishConsonantTokens(spoken),
@@ -4110,10 +4106,10 @@ function speechMatchesTarget(spoken,target){
     getStandardMandarinNearSoundTokens(spoken),
     getStandardMandarinNearSoundTokens(target)
   ))return true;
+  if(!task?.relaxedSpeechRecognition)return false;
   const spokenMediumSyllables=getMediumMandarinSyllables(spoken);
   const targetMediumSyllables=getMediumMandarinSyllables(target);
   if(containsMediumMandarinSequence(spokenMediumSyllables,targetMediumSyllables))return true;
-  if(!task?.relaxedSpeechRecognition)return false;
   if(containsMediumMandarinSequence(spokenMediumSyllables,targetMediumSyllables,"consonant"))return true;
   if(containsMediumMandarinSequence(spokenMediumSyllables,targetMediumSyllables,"vowel"))return true;
   if(containsTokenSequence(getMandarinConsonantTokens(spoken),getMandarinConsonantTokens(target)))return true;
