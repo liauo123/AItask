@@ -4068,11 +4068,33 @@ function containsTokenSequence(source,target){
   return false;
 }
 
+function normalizeFuzzySpeechPhrase(text){
+  const source=String(text||"").normalize("NFKC").toLowerCase();
+  if(isEnglishSpeechTarget(source)){
+    const optionalWords=new Set(["a","an","the","to","at","in","on","of","for","please"]);
+    const words=source.match(/[a-z]+(?:'[a-z]+)?/g)||[];
+    return words.filter(word=>!optionalWords.has(word)).join("");
+  }
+  let normalized=normalizeSpeechText(source);
+  if(!normalized)return normalized;
+  ["請問","麻煩","一下"].forEach(phrase=>{normalized=normalized.split(phrase).join("")});
+  return normalized.replace(/[的地得在了著過把被和跟與及請啊呀喔哦欸誒嗯呢吧嘛啦囉耶]/g,"");
+}
+
+function fuzzySpeechMatchesTarget(spoken,target){
+  if(!task?.fuzzySpeechRecognition)return false;
+  const spokenText=normalizeFuzzySpeechPhrase(spoken);
+  const targetText=normalizeFuzzySpeechPhrase(target);
+  if(!spokenText||!targetText||targetText.length<2)return false;
+  return spokenText===targetText;
+}
+
 function speechMatchesTarget(spoken,target){
   const spokenText=normalizeSpeechText(spoken);
   const targetText=normalizeSpeechText(target);
   if(!spokenText||!targetText)return false;
   if(spokenText===targetText||spokenText.includes(targetText))return true;
+  if(fuzzySpeechMatchesTarget(spoken,target))return true;
   if(isEnglishSpeechTarget(target)){
     const spokenPhonetics=getEnglishPhoneticTokens(spoken);
     const targetPhonetics=getEnglishPhoneticTokens(target);
