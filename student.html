@@ -1850,7 +1850,7 @@ async function loadTask(){
     task.speechRecognitionMode="browser";
     task.speechRecognitionLanguage="zh-TW";
     task.disableAutoPromptSpeech=isSpeakingMode()&&!!task.disableAutoPromptSpeech;
-    task.clickDisplaySeconds=Math.min(8,Math.max(3,Number(task.clickDisplaySeconds||5)));
+    task.clickDisplaySeconds=Math.min(10,Math.max(3,Number(task.clickDisplaySeconds||5)));
     task.clickRepeatCount=Math.min(5,Math.max(3,Number(task.clickRepeatCount||3)));
     task.clickSimultaneousCount=Math.min(3,Math.max(1,Number(task.clickSimultaneousCount||1)),task.targetClasses.length);
     task.hanziSpeechEnabled=isHanziMode()&&!!task.hanziSpeechEnabled;
@@ -2799,7 +2799,8 @@ async function showNextClickTrial(resumeRound=false){
   const promptSpeechText=useDescriptionPrompt&&description?description:clickCurrentTarget;
   const showPromptImage=!useDescriptionPrompt&&hasPromptThumbnail;
   const showPromptText=useDescriptionPrompt||useTextChoices||!hasPromptThumbnail;
-  $("clickPromptInstruction").textContent=useDescriptionPrompt?"說明文字":showPromptText?"請點選這個文字":"請點選這個縮圖";
+  $("clickPromptInstruction").textContent=useDescriptionPrompt?"":showPromptText?"請點選這個文字":"請點選這個縮圖";
+  $("clickPromptInstruction").classList.toggle("hidden",useDescriptionPrompt);
   $("clickPromptText").textContent=showPromptText?promptSpeechText:"";
   $("clickPromptText").classList.toggle("hidden",!showPromptText);
   $("clickPromptImage").classList.toggle("hidden",!showPromptImage);
