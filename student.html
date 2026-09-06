@@ -592,7 +592,7 @@ button,input{max-width:100%}
       <div id="advancedPromptCard" class="target hidden">
         <div class="target-question-row">
           <img id="advancedTargetThumbnail" class="target-thumbnail hidden" alt="進階評量題目縮圖" decoding="async">
-          <strong>語音題目</strong>
+          <strong id="advancedPromptLabel">語音題目</strong>
           <button id="repeatAdvancedPromptBtn" class="speak-btn advanced-prompt-speaker" type="button" aria-label="重複聽說明" title="重複聽說明">🔊</button>
         </div>
       </div>
@@ -1709,6 +1709,7 @@ function prepareAdvancedPrompt(autoSpeak=true){
 
   const target=task.targetClasses[currentIndex];
   currentAdvancedDescription=String(task.classDescriptions?.[target]||"").trim();
+  $("advancedPromptLabel").textContent=isReadingMode()?"說明文字":"語音題目";
   updateAdvancedTargetThumbnail();
 
   $("normalTargetCard").classList.add("hidden");
