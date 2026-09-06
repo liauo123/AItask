@@ -1709,7 +1709,7 @@ function prepareAdvancedPrompt(autoSpeak=true){
 
   const target=task.targetClasses[currentIndex];
   currentAdvancedDescription=String(task.classDescriptions?.[target]||"").trim();
-  $("advancedPromptLabel").textContent=isReadingMode()?"說明文字":"語音題目";
+  $("advancedPromptLabel").textContent=isReadingMode()?(currentAdvancedDescription||"說明文字"):"語音題目";
   updateAdvancedTargetThumbnail();
 
   $("normalTargetCard").classList.add("hidden");
