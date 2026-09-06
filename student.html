@@ -1401,7 +1401,7 @@ function getCurrentQuestionSpeechConfig(){
 }
 
 function primeSafariFirstQuestionSpeech(){
-  if(!isSafariBrowser()||!task)return false;
+  if(!isSafariBrowser()||!task||isAutomaticPromptSpeechDisabled())return false;
   const savedIndex=currentIndex;
   if(currentIndex>=task.targetClasses.length)currentIndex=0;
   const config=getCurrentQuestionSpeechConfig();
@@ -1455,6 +1455,7 @@ function resetQuestionReminderForCurrentQuestion(){
 
 function isQuestionReminderApplicable(){
   if(!task||finished||paused||pageAutoPaused||exitInProgress||currentIndex>=task.targetClasses.length)return false;
+  if(isAutomaticPromptSpeechDisabled())return false;
   if(isGameMode()||isTeachingMode()||isClickMode())return false;
   return isHanziMode()||isReadingMode()||(isEvaluationMode()&&isOptionalAudioRequired());
 }
@@ -1469,6 +1470,10 @@ function playCurrentQuestionPrompt(){
   if(isAdvancedMode()||isDescriptionPromptMode())return speakAdvancedPrompt();
   if(isHanziMode())return speakHanziPrompt(false);
   return speakEvaluationTarget();
+}
+
+function isAutomaticPromptSpeechDisabled(){
+  return !!(task&&isSpeakingMode()&&task.disableAutoPromptSpeech);
 }
 
 function isPlatformSpeechPlaying(){
@@ -1840,6 +1845,7 @@ async function loadTask(){
       : task.showThumbnailHint===undefined?true:!!task.showThumbnailHint;
     task.speechRecognitionMode="browser";
     task.speechRecognitionLanguage="zh-TW";
+    task.disableAutoPromptSpeech=isSpeakingMode()&&!!task.disableAutoPromptSpeech;
     task.clickDisplaySeconds=Math.min(8,Math.max(3,Number(task.clickDisplaySeconds||5)));
     task.clickRepeatCount=Math.min(5,Math.max(3,Number(task.clickRepeatCount||3)));
     task.clickSimultaneousCount=Math.min(3,Math.max(1,Number(task.clickSimultaneousCount||1)),task.targetClasses.length);
@@ -2255,7 +2261,7 @@ function renderHanziQuestion(){
     setTimeout(()=>{if(!finished&&currentIndex<total)input.focus()},120);
   }
   resetQuestionReminderForCurrentQuestion();
-  scheduleQuestionAutoSpeech(()=>speakHanziPrompt(false,true),300);
+  if(!isAutomaticPromptSpeechDisabled())scheduleQuestionAutoSpeech(()=>speakHanziPrompt(false,true),300);
 }
 
 function speakHanziPrompt(showError=true,autoPlayback=false){

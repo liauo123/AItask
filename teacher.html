@@ -91,6 +91,8 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none}
 .speakingMode .rangeSetting output{background:#dbeafe;color:#1d4ed8}
 .speakingMode .rangeSetting input[type="range"]{accent-color:#2563eb}
 .speakingMode .status{border:1px solid #bfdbfe;background:#eff6ff;color:#1d4ed8}
+.speakingMode .modeSettings{border-color:#93c5fd;background:rgba(239,246,255,.78)}
+.speakingMode .modeSetting{color:#1d4ed8}
 .speakingTitleRow{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
 .speakingTitleRow h2{margin:0}
 .speechMatchingSettings{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:7px}
@@ -205,6 +207,9 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none}
         </div>
         <div class="clickHint">每一個勾選的文字項目會成為一題完整語音辨識。</div>
         <input id="speakingTaskTitle" placeholder="口語模式(說)名稱">
+        <div class="modeSettings">
+          <label class="modeSetting"><input id="speakingDisableAutoSpeech" type="checkbox">停用自動唸出語音</label>
+        </div>
         <input id="speakingSpeechRecognition" type="checkbox" class="hidden" checked aria-hidden="true">
         <div class="rangeSetting">
           <label for="speakingRepeatCount">每個題目重複次數</label>
@@ -380,6 +385,7 @@ function saveTeacherDraft(){
     hanziRepeatCount:1,
     speakingTaskTitle:$("speakingTaskTitle").value,
     speakingRepeatCount:Number($("speakingRepeatCount").value||1),
+    speakingDisableAutoSpeech:$("speakingDisableAutoSpeech").checked,
     fuzzySpeechRecognition:$("fuzzySpeechRecognition").checked,
     relaxedSpeechRecognition:$("relaxedSpeechRecognition").checked,
     readingTitle:$("readingTitle").value,
@@ -451,6 +457,7 @@ function restoreTeacherDraftBase(){
   $("speakingTaskTitle").value=String(draft.speakingTaskTitle||"");
   $("speakingSpeechRecognition").checked=true;
   $("speakingRepeatCount").value=String(Math.min(5,Math.max(1,Number(draft.speakingRepeatCount||1))));
+  $("speakingDisableAutoSpeech").checked=!!draft.speakingDisableAutoSpeech;
   $("fuzzySpeechRecognition").checked=!!draft.fuzzySpeechRecognition;
   $("relaxedSpeechRecognition").checked=!!draft.relaxedSpeechRecognition;
   updateSpeakingRepeatLabel();
@@ -635,6 +642,7 @@ async function restoreTaskFromTaskList(taskId){
     syncRecognitionEngineUI();
     $("relaxedSpeechRecognition").checked=taskMode==="speaking"&&!!task.relaxedSpeechRecognition;
     $("fuzzySpeechRecognition").checked=taskMode==="speaking"&&!!task.fuzzySpeechRecognition;
+    $("speakingDisableAutoSpeech").checked=taskMode==="speaking"&&!!task.disableAutoPromptSpeech;
     $("readingRelaxedSpeechRecognition").checked=taskMode==="reading"&&!!task.relaxedSpeechRecognition;
     $("readingFuzzySpeechRecognition").checked=taskMode==="reading"&&!!task.fuzzySpeechRecognition;
     $("evaluationRelaxedSpeechRecognition").checked=taskMode==="evaluation"&&!!task.relaxedSpeechRecognition;
@@ -1311,6 +1319,7 @@ async function createSpeakingModeQR(){
       hanziText:hanziTexts.join("\n"),hanziTexts,hanziQuestionSequence:questionSequence,
       hanziWritingEnabled:false,hanziSpeechEnabled:true,hanziRepeatCount:repeatCount,
       speechRecognitionMode:"browser",speechRecognitionLanguage:"zh-TW",
+      disableAutoPromptSpeech:!!$("speakingDisableAutoSpeech").checked,
       fuzzySpeechRecognition:!!$("fuzzySpeechRecognition").checked,
       relaxedSpeechRecognition:!!$("relaxedSpeechRecognition").checked,
       orderMode:"fixed",taskMode:"speaking",maxPlayers:15,status:"active",
@@ -1413,7 +1422,7 @@ function studentURL(id){const base=new URL("student.html",location.href).toStrin
 ["modelURL","ocrKeywords","teachingTitle","taskTitle","advancedTitle","gameTitle","clickTitle","hanziTaskTitle","speakingTaskTitle","readingTitle"].forEach(id=>{
   $(id).addEventListener("input",scheduleTeacherDraftSave);
 });
-["relaxedSpeechRecognition","readingRelaxedSpeechRecognition","evaluationRelaxedSpeechRecognition","gameRelaxedSpeechRecognition","fuzzySpeechRecognition","readingFuzzySpeechRecognition","evaluationFuzzySpeechRecognition","gameFuzzySpeechRecognition"].forEach(id=>{
+["relaxedSpeechRecognition","readingRelaxedSpeechRecognition","evaluationRelaxedSpeechRecognition","gameRelaxedSpeechRecognition","fuzzySpeechRecognition","readingFuzzySpeechRecognition","evaluationFuzzySpeechRecognition","gameFuzzySpeechRecognition","speakingDisableAutoSpeech"].forEach(id=>{
   $(id).addEventListener("change",scheduleTeacherDraftSave);
 });
 $("recognitionEngine").addEventListener("change",()=>{
