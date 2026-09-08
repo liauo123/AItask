@@ -1956,7 +1956,7 @@ async function loadTask(){
       : task.showThumbnailHint===undefined?true:!!task.showThumbnailHint;
     task.speechRecognitionMode="browser";
     task.speechRecognitionLanguage="zh-TW";
-    if(isEvaluationMode()){
+    if(isEvaluationMode()&&!isReadingMode()){
       task.audioRequiredClasses=[];
       task.speechRecognitionEnabled=false;
       task.skipPhotoRecognition=false;
