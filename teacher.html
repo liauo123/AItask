@@ -1391,16 +1391,17 @@ $("createReadingBtn").onclick=async()=>{
       buttonSpeechRecognition:!!$("readingButtonSpeechRecognition").checked,
       speechRecognitionMode:"browser",speechRecognitionLanguage:"zh-TW",
       requiredConsecutiveFrames:10,orderMode:"fixed",taskMode:"reading",
+      interactionMode:"reading",
       status:"active",version:"3.7-reading-mode",
       createdAt:firebase.firestore.FieldValue.serverTimestamp()
     });
     status("readingStatus","問答模式(讀)建立成功！\nTask ID："+ref.id,"ok");
-    showQR(ref.id,title);
+    showQR(ref.id,title,"reading");
   }catch(e){
     status("readingStatus","建立問答模式(讀)失敗：\n"+(e.message||e),"err");
   }finally{$("createReadingBtn").disabled=false}
 };
-function studentURL(id){const base=new URL("student.html",location.href).toString(),u=new URL(base,location.href);u.searchParams.set("task",id);u.searchParams.set("v","3.11-reading-speech-only");return u.toString()}function showQR(id,title){const url=studentURL(id);$("qrTitle").textContent=title+"－QR Code";$("qrURL").textContent=url;$("qrCode").innerHTML="";new QRCode($("qrCode"),{text:url,width:260,height:260,correctLevel:QRCode.CorrectLevel.M});$("qrModal").classList.remove("hidden")}window.showQR=showQR;$("closeBtn").onclick=()=>$("qrModal").classList.add("hidden");$("copyBtn").onclick=()=>navigator.clipboard.writeText($("qrURL").textContent);
+function studentURL(id,mode=""){const base=new URL("student.html",location.href).toString(),u=new URL(base,location.href);u.searchParams.set("task",id);u.searchParams.set("v","3.12-reading-mode-guard");if(mode)u.searchParams.set("mode",mode);return u.toString()}function showQR(id,title,mode=""){const url=studentURL(id,mode);$("qrTitle").textContent=title+"－QR Code";$("qrURL").textContent=url;$("qrCode").innerHTML="";new QRCode($("qrCode"),{text:url,width:260,height:260,correctLevel:QRCode.CorrectLevel.M});$("qrModal").classList.remove("hidden")}window.showQR=showQR;$("closeBtn").onclick=()=>$("qrModal").classList.add("hidden");$("copyBtn").onclick=()=>navigator.clipboard.writeText($("qrURL").textContent);
 
 ["modelURL","ocrKeywords","teachingTitle","taskTitle","advancedTitle","gameTitle","clickTitle","hanziTaskTitle","speakingTaskTitle","readingTitle"].forEach(id=>{
   $(id).addEventListener("input",scheduleTeacherDraftSave);

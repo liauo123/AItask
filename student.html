@@ -1922,7 +1922,10 @@ async function loadTask(){
     if(!snap.exists)throw new Error("找不到此任務");
     task={id:snap.id,...snap.data()};
     if(task.status!=="active")throw new Error("任務目前未開放");
-    task.taskMode=task.taskMode||task.orderMode||"task";
+    const requestedMode=new URLSearchParams(location.search).get("mode");
+    const savedMode=task.taskMode||task.orderMode||"task";
+    const readingModeHint=requestedMode==="reading"||task.interactionMode==="reading"||/reading-mode/i.test(String(task.version||""));
+    task.taskMode=readingModeHint?"reading":savedMode;
     applyTaskModeTheme(task.taskMode);
     task.recognitionEngine=["coco-ssd","ocr"].includes(task.recognitionEngine)
       ? task.recognitionEngine
