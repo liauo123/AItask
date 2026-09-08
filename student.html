@@ -1952,6 +1952,18 @@ async function loadTask(){
       : task.showThumbnailHint===undefined?true:!!task.showThumbnailHint;
     task.speechRecognitionMode="browser";
     task.speechRecognitionLanguage="zh-TW";
+    if(isEvaluationMode()){
+      task.audioRequiredClasses=[];
+      task.speechRecognitionEnabled=false;
+      task.skipPhotoRecognition=false;
+      task.showNameText=false;
+      task.showThumbnailHint=true;
+      task.relaxedSpeechRecognition=false;
+      task.fuzzySpeechRecognition=false;
+    }else if(isGameMode()){
+      task.showNameText=false;
+      task.showThumbnailHint=true;
+    }
     task.disableAutoPromptSpeech=(isSpeakingMode()||isReadingMode())&&!!task.disableAutoPromptSpeech;
     task.buttonSpeechRecognition=(isSpeakingMode()||isReadingMode())&&!!task.buttonSpeechRecognition;
     task.clickDisplaySeconds=Math.min(10,Math.max(3,Number(task.clickDisplaySeconds||5)));
