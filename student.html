@@ -1285,7 +1285,7 @@ function isEvaluationMode(){
 }
 
 function isSpeechOnlyRecognition(){
-  return !!(task&&task.skipPhotoRecognition&&(isReadingMode()||(task.recognitionEngine==="ocr"&&(isEvaluationMode()||isGameMode()))));
+  return !!(task&&task.skipPhotoRecognition&&(isReadingMode()||isGameMode()||(task.recognitionEngine==="ocr"&&isEvaluationMode())));
 }
 
 function applyTaskModeTheme(mode){
@@ -1943,7 +1943,11 @@ async function loadTask(){
     task.audioRequiredClasses=Array.isArray(task.audioRequiredClasses)
       ? task.audioRequiredClasses.filter(name=>task.targetClasses.includes(name))
       : [];
-    task.skipPhotoRecognition=isReadingMode()?true:task.recognitionEngine==="ocr"&&(isEvaluationMode()||isGameMode())&&!!task.skipPhotoRecognition;
+    task.skipPhotoRecognition=isReadingMode()
+      ? true
+      : isGameMode()
+        ? !!task.skipPhotoRecognition
+        : task.recognitionEngine==="ocr"&&isEvaluationMode()&&!!task.skipPhotoRecognition;
     if(task.skipPhotoRecognition)task.audioRequiredClasses=[...task.targetClasses];
     task.promptMode=task.promptMode==="description"?"description":"name";
     task.showNameText=task.recognitionEngine==="ocr"&&!!task.showNameText;
