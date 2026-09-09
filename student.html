@@ -836,6 +836,7 @@ const trackedMicrophoneStreams=new Set();
 const trackedMicrophoneTracks=new Set();
 const trackedCameraTracks=new Set();
 let microphoneStreamTrackerInstalled=false;
+let chromiumSpeechPermissionPrimed=false;
 let mediaRequestsBlocked=false;
 let platformSpeechUnlocked=false;
 let platformSpeechRequestId=0;
@@ -849,6 +850,15 @@ const QUESTION_REMINDER_DELAY=10000;
 const QUESTION_REMINDER_LIMIT=10;
 const AUTOMATIC_SPEECH_IDLE_LIMIT=60000;
 const SPEECH_RECOGNITION_INPUT_LIMIT=40000;
+
+function isDesktopChromiumSpeechBrowser(){
+  const ua=String(navigator.userAgent||"");
+  return /(?:Chrome|Chromium|Edg)\//.test(ua)&&!/(?:iPhone|iPad|iPod|CriOS|EdgiOS)\b/.test(ua);
+}
+
+function speechRecognitionResumeDelay(){
+  return isDesktopChromiumSpeechBrowser()?900:300;
+}
 
 function refreshPlatformSpeechVoice(){
   if(!("speechSynthesis" in window))return null;
@@ -1041,6 +1051,21 @@ function installMicrophoneStreamTracker(){
     if(!microphoneStreamTrackerInstalled)throw new Error("瀏覽器不允許包裝 getUserMedia");
   }catch(e){
     console.warn("麥克風音軌追蹤無法安裝，改用辨識器停止流程。",e);
+  }
+}
+
+async function primeChromiumSpeechMicrophone(){
+  if(chromiumSpeechPermissionPrimed||!isDesktopChromiumSpeechBrowser())return;
+  const mediaDevices=navigator.mediaDevices;
+  if(!mediaDevices||typeof mediaDevices.getUserMedia!=="function")return;
+  const stream=await mediaDevices.getUserMedia({
+    audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},
+    video:false
+  });
+  try{
+    stream.getTracks().forEach(track=>track.stop());
+  }finally{
+    chromiumSpeechPermissionPrimed=true;
   }
 }
 
@@ -1569,7 +1594,7 @@ function scheduleAutomaticSpeechRecognition(delay=450){
     armAutomaticSpeechIdleTimer();
     if(isSpeakingMode())recognizeHanziSpeech({automatic:true});
     else if(isReadingMode())startOptionalAudioRecognition({automatic:true});
-  },Math.max(120,Number(delay)||450));
+  },Math.max(speechRecognitionResumeDelay(),120,Number(delay)||450));
 }
 
 function isPlatformSpeechPlaying(){
@@ -2621,7 +2646,7 @@ function recognizeHanziSpeech({automatic=false,resumeSession=false}={}){
       hanziSpeechResumeTimer=null;
       if(finished||paused||pageAutoPaused||exitInProgress||document.hidden)return;
       recognizeHanziSpeech({automatic,resumeSession:true});
-    },300);
+    },speechRecognitionResumeDelay());
   };
   recognition.onerror=event=>{
     const error=event.error||"請再試一次";
@@ -2637,6 +2662,7 @@ function recognizeHanziSpeech({automatic=false,resumeSession=false}={}){
     if(hanziSpeechRecognition===recognition)resumeRecognition("正在聆聽，請念出畫面上的字…");
   };
   try{
+    recognition.continuous=isDesktopChromiumSpeechBrowser();
     recognition.start();
     hanziSpeechStartWatchdog=setTimeout(()=>{
       if(hanziSpeechStarting&&hanziSpeechRecognition===recognition){
@@ -2654,6 +2680,7 @@ async function startHanziTest(){
   $("startBtn").disabled=true;setStatus("joinStatus",isSpeakingMode()?"正在建立口語練習紀錄…":"正在建立文字練習紀錄…");
   try{
     disableHanziCamera();
+    if(isSpeakingMode())await primeChromiumSpeechMicrophone();
     const currentUser=await ensureAuth();
     resultRef=await db.collection("taskResults").add({taskId,teacherId:task.teacherId||"",studentUid:currentUser.uid,studentName:"學生 "+selectedStudentNumber,studentCode:selectedStudentNumber,projectType:"hanzi",targetClasses:[...task.targetClasses],hanziRepeatCount:task.hanziRepeatCount,completedClasses:[],incorrectClasses:[],incorrectAudioClasses:[],writingInputRecords:[],speechInputRecords:[],progress:0,attempts:0,errorCount:0,itemErrorCounts:{},imageItemErrorCounts:{},audioItemErrorCounts:{},status:"inProgress",taskMode:task.taskMode||"hanzi",startedAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
     stopHanziSpeechRecognition(hanziSpeechRecognition,true);
@@ -2703,6 +2730,7 @@ async function startTask(){
   try{
     if(!model)await loadSelectedModel();
     validateBrowserSpeechRecognition();
+    if(getEffectiveAudioRequiredClasses().length)await primeChromiumSpeechMicrophone();
     const labels=getModelLabels();
     const missing=task.targetClasses.filter(x=>!labels.includes(x));
     if(missing.length)throw new Error("模型缺少類別："+missing.join("、"));
@@ -4721,9 +4749,10 @@ async function startOptionalAudioRecognition({automatic=false,resumeSession=fals
   microphoneStartRequestedAt=Date.now();
   let settled=false;
   let lastHeard="";
+  let resultProcessing=false;
 
   recognition.lang=getSpeechRecognitionLanguage(target);
-  recognition.continuous=false;
+  recognition.continuous=isDesktopChromiumSpeechBrowser();
   recognition.interimResults=false;
   recognition.maxAlternatives=5;
 
@@ -4782,11 +4811,11 @@ async function startOptionalAudioRecognition({automatic=false,resumeSession=fals
       optionalAudioResumeTimer=null;
       if(finished||paused||pageAutoPaused||exitInProgress||document.hidden)return;
       startOptionalAudioRecognition({automatic,resumeSession:true});
-    },300);
+    },speechRecognitionResumeDelay());
   };
 
-  recognition.onresult=event=>{
-    if(settled||!optionalAudioListening||finished||paused||currentTarget()!==target)return;
+  recognition.onresult=async event=>{
+    if(settled||resultProcessing||!optionalAudioListening||finished||paused||currentTarget()!==target)return;
     const alternatives=[];
     for(let resultIndex=event.resultIndex;resultIndex<event.results.length;resultIndex++){
       const result=event.results[resultIndex];
@@ -4802,6 +4831,18 @@ async function startOptionalAudioRecognition({automatic=false,resumeSession=fals
     if(automatic&&lastHeard)noteAutomaticSpeechInput();
     const matched=alternatives.find(item=>speechMatchesTarget(item.transcript,target));
     if(!matched){
+      if(isDesktopChromiumSpeechBrowser()&&lastHeard){
+        resultProcessing=true;
+        const heardText=lastHeard;
+        lastHeard="";
+        setVoiceResult(`辨識到「${heardText}」，請再說一次。`,"error");
+        showCaptureFeedback("failure","再說一次");
+        playTaskErrorSound();
+        await recordOptionalAudioFailure(target,true,heardText);
+        resultProcessing=false;
+        if(!settled&&optionalAudioListening)setVoiceResult("正在聆聽");
+        return;
+      }
       setVoiceResult(`辨識到「${lastHeard||"—"}」，正在確認…`);
       return;
     }
