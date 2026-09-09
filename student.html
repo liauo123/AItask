@@ -165,7 +165,7 @@ body[data-mode-theme="reading"] #advancedPromptCard .target-question-row{flex-di
 .capture-feedback{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;pointer-events:none;visibility:hidden;opacity:0;color:#fff;text-align:center;text-shadow:0 3px 12px rgba(0,0,0,.45)}
 .capture-feedback-icon{font-size:clamp(90px,24vw,170px);font-weight:1000;line-height:1}.capture-feedback-text{font-size:clamp(34px,10vw,68px);font-weight:1000;letter-spacing:.08em}
 .capture-feedback.success{visibility:visible;animation:successScreenFlash 1s ease-out 1}
-.capture-feedback.failure{visibility:visible;animation:failureScreenFlash 2s ease-out 1}
+.capture-feedback.failure{visibility:visible;animation:failureScreenFlash 3s ease-out 1}
 @keyframes successScreenFlash{
   0%{opacity:0;background:rgba(22,163,74,0)}
   12%{opacity:1;background:rgba(22,163,74,.88)}
@@ -1141,7 +1141,7 @@ function showCaptureFeedback(type,text){
   captureFeedbackTimer=setTimeout(()=>{
     feedback.classList.remove("success","failure");
     captureFeedbackTimer=null;
-  },type==="failure"?2000:1050);
+  },type==="failure"?3000:1050);
 }
 
 function playTaskSuccessSound(){
