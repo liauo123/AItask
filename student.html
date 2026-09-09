@@ -2574,7 +2574,9 @@ function recognizeHanziSpeech({automatic=false,resumeSession=false}={}){
   clearHanziSpeechResumeTimer();
   stopPlatformSpeech();
   if(hanziSpeechRecognition)stopHanziSpeechRecognition(hanziSpeechRecognition,true,true);
-  const recognition=rememberSpeechRecognition(new SpeechRecognition());hanziSpeechRecognition=recognition;hanziSpeechStarting=true;microphoneStartRequestedAt=Date.now();recognition.lang=getSpeechRecognitionLanguage(target);recognition.interimResults=false;recognition.maxAlternatives=3;
+  const recognition=rememberSpeechRecognition(new SpeechRecognition());hanziSpeechRecognition=recognition;hanziSpeechStarting=true;microphoneStartRequestedAt=Date.now();recognition.lang=getSpeechRecognitionLanguage(target);recognition.interimResults=false;recognition.maxAlternatives=5;
+  const chromiumContinuous=isDesktopChromiumSpeechBrowser();
+  let resultProcessing=false;
   $("speakHanziBtn").disabled=false;
   $("speakHanziBtn").classList.add("is-listening");
   $("speakHanziBtn").title="停止語音辨識";
@@ -2597,12 +2599,17 @@ function recognizeHanziSpeech({automatic=false,resumeSession=false}={}){
     },remaining);
   };
   recognition.onresult=async event=>{
-    const alternatives=[...event.results[0]].map(item=>item.transcript);
+    if(resultProcessing||hanziSpeechRecognition!==recognition||finished||paused||currentIndex>=task.targetClasses.length)return;
+    const result=event.results[event.resultIndex]||event.results[event.results.length-1];
+    const alternatives=result?[...result].map(item=>String(item.transcript||"").trim()).filter(Boolean):[];
+    if(!alternatives.length)return;
+    resultProcessing=true;
     if(automatic&&alternatives.some(text=>String(text||"").trim()))noteAutomaticSpeechInput();
-    stopHanziSpeechRecognition(recognition,false);
+    const matched=alternatives.some(text=>speechMatchesTarget(text,target));
+    if(!chromiumContinuous||matched)stopHanziSpeechRecognition(recognition,false);
     try{
       attempts++;
-      if(!alternatives.some(text=>speechMatchesTarget(text,target))){
+      if(!matched){
         const heardText=String(alternatives[0]||"").trim();
         localIncorrectAudioClasses.push(target);consecutiveWrongAttempts++;totalErrorCount++;addItemError(target,"audio");playTaskErrorSound();showCaptureFeedback("failure","再說一次");
         if(resultRef){
@@ -2620,11 +2627,18 @@ function recognizeHanziSpeech({automatic=false,resumeSession=false}={}){
           }catch(e){console.warn("國字語音錯誤紀錄失敗",e)}
         }
         setStatus("hanziStatus",`聽到「${alternatives[0]||""}」，請再試一次（已答錯 ${consecutiveWrongAttempts} 次）。`,"error");
-        if(automatic)scheduleAutomaticSpeechRecognition(550);
+        if(chromiumContinuous&&hanziSpeechRecognition===recognition){
+          setTimeout(()=>{
+            if(hanziSpeechRecognition===recognition&&!finished&&!paused)setStatus("hanziStatus","正在持續聆聽，請再說一次…");
+          },900);
+        }else if(automatic){
+          scheduleAutomaticSpeechRecognition(550);
+        }
         return;
       }
       clearAutomaticSpeechIdleTimer(false);playTaskSuccessSound();showCaptureFeedback("success","語音答對了");await completeHanziCharacter();
     }finally{
+      resultProcessing=false;
       if(!finished&&!exitInProgress){
         const button=$("speakHanziBtn");
         if(button)button.disabled=false;
@@ -2662,7 +2676,7 @@ function recognizeHanziSpeech({automatic=false,resumeSession=false}={}){
     if(hanziSpeechRecognition===recognition)resumeRecognition("正在聆聽，請念出畫面上的字…");
   };
   try{
-    recognition.continuous=isDesktopChromiumSpeechBrowser();
+    recognition.continuous=chromiumContinuous;
     recognition.start();
     hanziSpeechStartWatchdog=setTimeout(()=>{
       if(hanziSpeechStarting&&hanziSpeechRecognition===recognition){
