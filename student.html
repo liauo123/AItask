@@ -165,7 +165,7 @@ body[data-mode-theme="reading"] #advancedPromptCard .target-question-row{flex-di
 .capture-feedback{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;pointer-events:none;visibility:hidden;opacity:0;color:#fff;text-align:center;text-shadow:0 3px 12px rgba(0,0,0,.45)}
 .capture-feedback-icon{font-size:clamp(90px,24vw,170px);font-weight:1000;line-height:1}.capture-feedback-text{font-size:clamp(34px,10vw,68px);font-weight:1000;letter-spacing:.08em}
 .capture-feedback.success{visibility:visible;animation:successScreenFlash 1s ease-out 1}
-.capture-feedback.failure{visibility:visible;opacity:1;background:rgba(251,146,60,.62);animation:failureScreenFlash 8s linear 1 both}
+.capture-feedback.failure{visibility:visible;opacity:1;background:rgba(251,146,60,.62);animation:failureScreenFlash var(--capture-feedback-duration,6s) linear 1 both}
 @keyframes successScreenFlash{
   0%{opacity:0;background:rgba(22,163,74,0)}
   12%{opacity:1;background:rgba(22,163,74,.88)}
@@ -1155,19 +1155,25 @@ function flashTaskResultBox(){
   },850);
 }
 
-function showCaptureFeedback(type,text){
+function showCaptureFeedback(type,text,durationMs=null){
   const feedback=$("captureFeedback");
   if(!feedback)return;
   if(captureFeedbackTimer)clearTimeout(captureFeedbackTimer);
   feedback.classList.remove("success","failure");
+  const displayDuration=type==="failure"
+    ?Math.max(500,Number(durationMs)||6000)
+    :1050;
+  if(type==="failure")feedback.style.setProperty("--capture-feedback-duration",displayDuration+"ms");
+  else feedback.style.removeProperty("--capture-feedback-duration");
   $("captureFeedbackIcon").textContent=type==="success"?"✓":"↻";
   $("captureFeedbackText").textContent=text;
   void feedback.offsetWidth;
   feedback.classList.add(type);
   captureFeedbackTimer=setTimeout(()=>{
     feedback.classList.remove("success","failure");
+    feedback.style.removeProperty("--capture-feedback-duration");
     captureFeedbackTimer=null;
-  },type==="failure"?8000:1050);
+  },displayDuration);
 }
 
 function playTaskSuccessSound(){
@@ -2469,7 +2475,7 @@ async function submitHanziWritingAnswer(){
     totalErrorCount++;
     addItemError(target,"image");
     playTaskErrorSound();
-    showCaptureFeedback("failure","再寫一次");
+    showCaptureFeedback("failure","再寫一次",4000);
     if(resultRef){
       try{
         await resultRef.update({
@@ -3793,7 +3799,7 @@ async function captureAndRecognize(){
       totalErrorCount++;
       addItemError(target,"image");
       if(isEvaluationMode())consecutiveWrongAttempts++;
-      showCaptureFeedback("failure","再試一次");
+      showCaptureFeedback("failure","再試一次",4000);
       playTaskErrorSound();
 
       if(target&&!localIncorrectClasses.includes(target)){
@@ -3840,7 +3846,7 @@ async function captureAndRecognize(){
       },850);
     }
   }catch(e){
-    showCaptureFeedback("failure","再試一次");
+    showCaptureFeedback("failure","再試一次",4000);
     playTaskErrorSound();
     $("imageOverlay").textContent="拍照辨識失敗，請再試一次";
     lastImageOverlayText=$("imageOverlay").textContent;
