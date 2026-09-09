@@ -165,7 +165,7 @@ body[data-mode-theme="reading"] #advancedPromptCard .target-question-row{flex-di
 .capture-feedback{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;pointer-events:none;visibility:hidden;opacity:0;color:#fff;text-align:center;text-shadow:0 3px 12px rgba(0,0,0,.45)}
 .capture-feedback-icon{font-size:clamp(90px,24vw,170px);font-weight:1000;line-height:1}.capture-feedback-text{font-size:clamp(34px,10vw,68px);font-weight:1000;letter-spacing:.08em}
 .capture-feedback.success{visibility:visible;animation:successScreenFlash 1s ease-out 1}
-.capture-feedback.failure{visibility:visible;animation:failureScreenFlash 3s ease-out 1}
+.capture-feedback.failure{visibility:visible;animation:failureScreenFlash 5s ease-out 1}
 @keyframes successScreenFlash{
   0%{opacity:0;background:rgba(22,163,74,0)}
   12%{opacity:1;background:rgba(22,163,74,.88)}
@@ -848,7 +848,7 @@ let automaticSpeechRestartTimer=null,automaticSpeechIdleTimer=null,automaticSpee
 const QUESTION_REMINDER_DELAY=10000;
 const QUESTION_REMINDER_LIMIT=10;
 const AUTOMATIC_SPEECH_IDLE_LIMIT=60000;
-const SPEECH_RECOGNITION_INPUT_LIMIT=10000;
+const SPEECH_RECOGNITION_INPUT_LIMIT=20000;
 
 function refreshPlatformSpeechVoice(){
   if(!("speechSynthesis" in window))return null;
@@ -1142,7 +1142,7 @@ function showCaptureFeedback(type,text){
   captureFeedbackTimer=setTimeout(()=>{
     feedback.classList.remove("success","failure");
     captureFeedbackTimer=null;
-  },type==="failure"?3000:1050);
+  },type==="failure"?5000:1050);
 }
 
 function playTaskSuccessSound(){
@@ -2553,7 +2553,7 @@ function recognizeHanziSpeech({automatic=false}={}){
     hanziSpeechInputTimer=setTimeout(()=>{
       if(hanziSpeechRecognition!==recognition)return;
       stopHanziSpeechRecognition(recognition,true);
-      setStatus("hanziStatus",automatic?"語音辨識10秒逾時，正在繼續聆聽。":"語音辨識10秒逾時，請再按一次麥克風按鈕。","error");
+      setStatus("hanziStatus",automatic?"語音辨識20秒逾時，正在繼續聆聽。":"語音辨識20秒逾時，請再按一次麥克風按鈕。","error");
       if(automatic)scheduleAutomaticSpeechRecognition(550);
     },SPEECH_RECOGNITION_INPUT_LIMIT);
   };
@@ -4686,7 +4686,7 @@ async function startOptionalAudioRecognition({automatic=false}={}){
     updateVerificationUI();
     optionalAudioTimer=setTimeout(()=>{
       if(!settled&&optionalAudioListening){
-        failRecognition(automatic?"語音辨識10秒逾時，正在繼續聆聽。":"語音辨識10秒逾時，請按按鈕重新嘗試。");
+        failRecognition(automatic?"語音辨識20秒逾時，正在繼續聆聽。":"語音辨識20秒逾時，請按按鈕重新嘗試。");
       }
     },SPEECH_RECOGNITION_INPUT_LIMIT);
   };
