@@ -851,7 +851,6 @@ const QUESTION_REMINDER_LIMIT=10;
 const AUTOMATIC_SPEECH_IDLE_LIMIT=60000;
 const SPEECH_RECOGNITION_INPUT_LIMIT=40000;
 const SPEECH_ERROR_FEEDBACK_DURATION=6000;
-const CHROMIUM_SPEECH_CANDIDATE_LIMIT=15;
 
 function isDesktopChromiumSpeechBrowser(){
   const ua=String(navigator.userAgent||"");
@@ -859,22 +858,7 @@ function isDesktopChromiumSpeechBrowser(){
 }
 
 function speechRecognitionResumeDelay(){
-  return isDesktopChromiumSpeechBrowser()?350:300;
-}
-
-function mergeChromiumSpeechCandidates(saved,candidates){
-  const merged=[...candidates,...saved];
-  const unique=[];
-  const seen=new Set();
-  for(const item of merged){
-    const transcript=String(item?.transcript||"").trim();
-    const key=normalizeSpeechText(transcript);
-    if(!key||seen.has(key))continue;
-    seen.add(key);
-    unique.push({transcript,confidence:Number(item?.confidence||0)});
-    if(unique.length>=CHROMIUM_SPEECH_CANDIDATE_LIMIT)break;
-  }
-  return unique;
+  return isDesktopChromiumSpeechBrowser()?900:300;
 }
 
 function refreshPlatformSpeechVoice(){
@@ -2597,11 +2581,8 @@ function recognizeHanziSpeech({automatic=false,resumeSession=false}={}){
   clearHanziSpeechResumeTimer();
   stopPlatformSpeech();
   if(hanziSpeechRecognition)stopHanziSpeechRecognition(hanziSpeechRecognition,true,true);
-  const recognition=rememberSpeechRecognition(new SpeechRecognition());hanziSpeechRecognition=recognition;hanziSpeechStarting=true;microphoneStartRequestedAt=Date.now();recognition.lang=getSpeechRecognitionLanguage(target);
+  const recognition=rememberSpeechRecognition(new SpeechRecognition());hanziSpeechRecognition=recognition;hanziSpeechStarting=true;microphoneStartRequestedAt=Date.now();recognition.lang=getSpeechRecognitionLanguage(target);recognition.interimResults=false;recognition.maxAlternatives=5;
   const chromiumContinuous=isDesktopChromiumSpeechBrowser();
-  recognition.interimResults=chromiumContinuous;
-  recognition.maxAlternatives=5;
-  let chromiumCandidates=[];
   let resultProcessing=false;
   $("speakHanziBtn").disabled=false;
   $("speakHanziBtn").classList.add("is-listening");
@@ -2626,26 +2607,12 @@ function recognizeHanziSpeech({automatic=false,resumeSession=false}={}){
   };
   recognition.onresult=async event=>{
     if(resultProcessing||hanziSpeechRecognition!==recognition||finished||paused||currentIndex>=task.targetClasses.length)return;
-    const currentCandidates=[];
-    let hasFinalResult=!chromiumContinuous;
-    for(let resultIndex=event.resultIndex;resultIndex<event.results.length;resultIndex++){
-      const result=event.results[resultIndex];
-      if(result?.isFinal!==false)hasFinalResult=true;
-      for(const item of result){
-        const transcript=String(item.transcript||"").trim();
-        if(transcript)currentCandidates.push({transcript,confidence:Number(item.confidence||0)});
-      }
-    }
-    if(chromiumContinuous)chromiumCandidates=mergeChromiumSpeechCandidates(chromiumCandidates,currentCandidates);
-    const alternatives=(chromiumContinuous?chromiumCandidates:currentCandidates).map(item=>item.transcript);
+    const result=event.results[event.resultIndex]||event.results[event.results.length-1];
+    const alternatives=result?[...result].map(item=>String(item.transcript||"").trim()).filter(Boolean):[];
     if(!alternatives.length)return;
+    resultProcessing=true;
     if(automatic&&alternatives.some(text=>String(text||"").trim()))noteAutomaticSpeechInput();
     const matched=alternatives.some(text=>speechMatchesTarget(text,target));
-    if(!matched&&!hasFinalResult){
-      setStatus("hanziStatus",`辨識到「${alternatives[0]}」，正在確認…`);
-      return;
-    }
-    resultProcessing=true;
     if(!chromiumContinuous||matched)stopHanziSpeechRecognition(recognition,false);
     try{
       attempts++;
@@ -2668,7 +2635,6 @@ function recognizeHanziSpeech({automatic=false,resumeSession=false}={}){
         }
         setStatus("hanziStatus",`聽到「${alternatives[0]||""}」，請再試一次（已答錯 ${consecutiveWrongAttempts} 次）。`,"error");
         if(chromiumContinuous&&hanziSpeechRecognition===recognition){
-          chromiumCandidates=[];
           setTimeout(()=>{
             if(hanziSpeechRecognition===recognition&&!finished&&!paused)setStatus("hanziStatus","正在持續聆聽，請再說一次…");
           },900);
@@ -4805,12 +4771,10 @@ async function startOptionalAudioRecognition({automatic=false,resumeSession=fals
   let settled=false;
   let lastHeard="";
   let resultProcessing=false;
-  const chromiumContinuous=isDesktopChromiumSpeechBrowser();
-  let chromiumCandidates=[];
 
   recognition.lang=getSpeechRecognitionLanguage(target);
-  recognition.continuous=chromiumContinuous;
-  recognition.interimResults=chromiumContinuous;
+  recognition.continuous=isDesktopChromiumSpeechBrowser();
+  recognition.interimResults=false;
   recognition.maxAlternatives=5;
 
   updateVerificationUI();
@@ -4873,34 +4837,25 @@ async function startOptionalAudioRecognition({automatic=false,resumeSession=fals
 
   recognition.onresult=async event=>{
     if(settled||resultProcessing||!optionalAudioListening||finished||paused||currentTarget()!==target)return;
-    const currentCandidates=[];
-    let hasFinalResult=!chromiumContinuous;
+    const alternatives=[];
     for(let resultIndex=event.resultIndex;resultIndex<event.results.length;resultIndex++){
       const result=event.results[resultIndex];
-      if(result?.isFinal!==false)hasFinalResult=true;
       for(let alternativeIndex=0;alternativeIndex<result.length;alternativeIndex++){
         const alternative=result[alternativeIndex];
-        currentCandidates.push({
+        alternatives.push({
           transcript:String(alternative.transcript||"").trim(),
           confidence:Number(alternative.confidence||0)
         });
       }
     }
-    if(chromiumContinuous)chromiumCandidates=mergeChromiumSpeechCandidates(chromiumCandidates,currentCandidates);
-    const alternatives=chromiumContinuous?chromiumCandidates:currentCandidates;
     lastHeard=alternatives[0]?.transcript||"";
     if(automatic&&lastHeard)noteAutomaticSpeechInput();
     const matched=alternatives.find(item=>speechMatchesTarget(item.transcript,target));
     if(!matched){
-      if(chromiumContinuous&&!hasFinalResult){
-        setVoiceResult(`辨識到「${lastHeard||"—"}」，正在確認…`);
-        return;
-      }
-      if(chromiumContinuous&&lastHeard){
+      if(isDesktopChromiumSpeechBrowser()&&lastHeard){
         resultProcessing=true;
         const heardText=lastHeard;
         lastHeard="";
-        chromiumCandidates=[];
         setVoiceResult(`辨識到「${heardText}」，請再說一次。`,"error");
         showCaptureFeedback("failure","再說一次",SPEECH_ERROR_FEEDBACK_DURATION);
         playTaskErrorSound();
