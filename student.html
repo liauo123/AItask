@@ -919,7 +919,7 @@ function stopPlatformSpeech(){
 function speakPlatformText(text,{lang="zh-TW",rate=.9,pitch=1,volume=1,immediate=false}={}){
   const value=String(text||"").trim();
   if(!value||!("speechSynthesis" in window))return Promise.resolve(false);
-  const playbackRate=task?.slowSpeechPlayback ? .6 : rate;
+  const playbackRate=task?.slowSpeechPlayback ? .4 : rate;
   const now=Date.now();
   if(value===platformSpeechLastText&&now-platformSpeechLastAt<2200&&platformSpeechLastPromise){
     return platformSpeechLastPromise;
