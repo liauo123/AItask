@@ -1072,22 +1072,17 @@ function installMicrophoneStreamTracker(){
 }
 
 async function primeChromiumSpeechMicrophone(){
-  if(chromiumSpeechPermissionPrimed||!isDesktopChromiumSpeechBrowser())return true;
+  if(chromiumSpeechPermissionPrimed||!isDesktopChromiumSpeechBrowser())return;
   const mediaDevices=navigator.mediaDevices;
+  if(!mediaDevices||typeof mediaDevices.getUserMedia!=="function")return;
+  const stream=await mediaDevices.getUserMedia({
+    audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},
+    video:false
+  });
   try{
-    if(!mediaDevices||typeof mediaDevices.getUserMedia!=="function")return false;
-    const stream=await mediaDevices.getUserMedia({
-      audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},
-      video:false
-    });
-    try{
-      stream.getTracks().forEach(track=>track.stop());
-    }catch(e){}
+    stream.getTracks().forEach(track=>track.stop());
+  }finally{
     chromiumSpeechPermissionPrimed=true;
-    return true;
-  }catch(error){
-    console.warn("麥克風預先啟用失敗，改由正式語音辨識流程再次嘗試。",error);
-    return false;
   }
 }
 
@@ -2710,19 +2705,13 @@ function recognizeHanziSpeech({automatic=false,resumeSession=false}={}){
   };
   recognition.onerror=event=>{
     const error=event.error||"請再試一次";
-    const message={
-      "not-allowed":"麥克風權限被拒絕，請在瀏覽器網址列旁允許使用麥克風。",
-      "service-not-allowed":"瀏覽器未允許語音辨識服務，請檢查網站權限。",
-      "audio-capture":"找不到可用的麥克風，請確認麥克風已連接，並在系統音效設定中選為輸入裝置。",
-      "network":"語音辨識服務連線失敗，請確認網路後再試一次。"
-    }[error]||`語音辨識失敗：${error}`;
     const recoverable=!['not-allowed','service-not-allowed','audio-capture','network'].includes(event.error);
     if(recoverable){
       resumeRecognition("正在聆聽，請念出畫面上的字…");
       return;
     }
     stopHanziSpeechRecognition(recognition);
-    setStatus("hanziStatus",message,"error");
+    setStatus("hanziStatus","語音辨識失敗："+error,"error");
   };
   recognition.onend=()=>{
     if(hanziSpeechRecognition===recognition)resumeRecognition("正在聆聽，請念出畫面上的字…");
