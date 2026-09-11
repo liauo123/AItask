@@ -4385,6 +4385,42 @@ function containsTokenSequence(source,target){
   return false;
 }
 
+function collapseAdjacentRepeatedSpeechUnits(units,maxBlockSize=6){
+  const value=[...units].filter(Boolean);
+  let changed=true;
+  while(changed&&value.length>1){
+    changed=false;
+    const largest=Math.min(maxBlockSize,Math.floor(value.length/2));
+    outer:
+    for(let blockSize=largest;blockSize>=1;blockSize--){
+      for(let start=0;start+blockSize*2<=value.length;start++){
+        let same=true;
+        for(let offset=0;offset<blockSize;offset++){
+          if(value[start+offset]!==value[start+blockSize+offset]){
+            same=false;
+            break;
+          }
+        }
+        if(!same)continue;
+        value.splice(start+blockSize,blockSize);
+        changed=true;
+        break outer;
+      }
+    }
+  }
+  return value;
+}
+
+function removeFuzzySpeechRepetitions(text){
+  const source=String(text||"").normalize("NFKC").toLowerCase();
+  if(isEnglishSpeechTarget(source)){
+    const words=source.match(/[a-z]+(?:'[a-z]+)?|\d+/g)||[];
+    return collapseAdjacentRepeatedSpeechUnits(words).join(" ");
+  }
+  const normalized=normalizeSpeechText(source);
+  return collapseAdjacentRepeatedSpeechUnits([...normalized]).join("");
+}
+
 function normalizeFuzzySpeechPhrase(text){
   const source=String(text||"").normalize("NFKC").toLowerCase();
   if(isEnglishSpeechTarget(source)){
@@ -4658,6 +4694,18 @@ function fuzzySpeechMatchesTarget(spoken,target){
   if(!spokenText||!targetText)return false;
   if(targetText.length>=2&&spokenText===targetText)return true;
   if(canonicalizeFuzzyDailySemanticText(spoken)===canonicalizeFuzzyDailySemanticText(target))return true;
+  const spokenWithoutRepetitions=removeFuzzySpeechRepetitions(spoken);
+  const targetWithoutRepetitions=removeFuzzySpeechRepetitions(target);
+  const spokenRepetitionText=normalizeFuzzySpeechPhrase(spokenWithoutRepetitions);
+  const targetRepetitionText=normalizeFuzzySpeechPhrase(targetWithoutRepetitions);
+  if(
+    targetRepetitionText.length>=2&&
+    spokenRepetitionText===targetRepetitionText
+  )return true;
+  if(
+    canonicalizeFuzzyDailySemanticText(spokenWithoutRepetitions)===
+    canonicalizeFuzzyDailySemanticText(targetWithoutRepetitions)
+  )return true;
   if(targetText.length<2)return false;
   return fuzzyDailySemanticMatchesTarget(spoken,target);
 }
