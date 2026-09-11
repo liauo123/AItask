@@ -919,6 +919,7 @@ function stopPlatformSpeech(){
 function speakPlatformText(text,{lang="zh-TW",rate=.9,pitch=1,volume=1,immediate=false}={}){
   const value=String(text||"").trim();
   if(!value||!("speechSynthesis" in window))return Promise.resolve(false);
+  const playbackRate=task?.slowSpeechPlayback ? .6 : rate;
   const now=Date.now();
   if(value===platformSpeechLastText&&now-platformSpeechLastAt<2200&&platformSpeechLastPromise){
     return platformSpeechLastPromise;
@@ -946,14 +947,17 @@ function speakPlatformText(text,{lang="zh-TW",rate=.9,pitch=1,volume=1,immediate
       try{
         const utterance=new SpeechSynthesisUtterance(value);
         utterance.lang=lang;
-        utterance.rate=rate;
+        utterance.rate=playbackRate;
         utterance.pitch=pitch;
         utterance.volume=volume;
         const voice=preferredPlatformVoice||refreshPlatformSpeechVoice();
         if(voice&&/^zh/i.test(lang))utterance.voice=voice;
         utterance.onend=()=>finish(true);
         utterance.onerror=()=>finish(false);
-        fallbackTimer=setTimeout(()=>finish(false),Math.max(8000,value.length*650));
+        fallbackTimer=setTimeout(
+          ()=>finish(false),
+          Math.max(8000,value.length*650*(.9/Math.max(.1,playbackRate)))
+        );
         synthesis.speak(utterance);
         setTimeout(()=>{
           if(requestId===platformSpeechRequestId&&synthesis.paused){
@@ -1976,6 +1980,7 @@ async function loadTask(){
     if(!snap.exists)throw new Error("找不到此任務");
     task={id:snap.id,...snap.data()};
     if(task.status!=="active")throw new Error("任務目前未開放");
+    task.slowSpeechPlayback=!!task.slowSpeechPlayback;
     const requestedMode=new URLSearchParams(location.search).get("mode");
     const savedMode=task.taskMode||task.orderMode||"task";
     const readingModeHint=requestedMode==="reading"||task.interactionMode==="reading"||/reading-mode/i.test(String(task.version||""));
