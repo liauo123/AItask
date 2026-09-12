@@ -1481,7 +1481,7 @@ function primeSafariFirstQuestionSpeech(){
   safariPrimedSpeechText=config.text;
   safariPrimedSpeechPromise=speakPlatformText(config.text,{
     rate:config.rate,
-    volume:isClickMode() ? .01 : 1,
+    volume:1,
     immediate:true
   });
   return true;
@@ -2950,17 +2950,7 @@ function clearClickTimers(preserveRound=false){
 function speakClickLabel(label,autoPlayback=false){
   if(autoPlayback){
     const primed=continueAfterSafariPrimedSpeech(label,{rate:.9});
-    if(primed){
-      return Promise.race([
-        Promise.resolve(primed),
-        new Promise(resolve=>setTimeout(resolve,600))
-      ]).then(()=>{
-        platformSpeechLastText="";
-        platformSpeechLastAt=0;
-        platformSpeechLastPromise=null;
-        return speakPlatformText(label,{rate:.9,immediate:true});
-      });
-    }
+    if(primed)return primed;
   }
   return speakPlatformText(label,{rate:.9});
 }
