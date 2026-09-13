@@ -849,7 +849,7 @@ let automaticSpeechRestartTimer=null,automaticSpeechIdleTimer=null,automaticSpee
 const QUESTION_REMINDER_DELAY=10000;
 const QUESTION_REMINDER_LIMIT=10;
 const AUTOMATIC_SPEECH_IDLE_LIMIT=60000;
-const SPEECH_RECOGNITION_INPUT_LIMIT=20000;
+const SPEECH_RECOGNITION_INPUT_LIMIT=10000;
 const SPEECH_ERROR_FEEDBACK_DURATION=1500;
 const CHROMIUM_SPEECH_CANDIDATE_LIMIT=15;
 
@@ -1860,8 +1860,10 @@ function shouldRepeatPromptAfterSpeechError(){
   return !!(task&&(isSpeakingMode()||isReadingMode())&&task.repeatPromptAfterSpeechError);
 }
 
-function repeatQuestionPromptAfterSpeechError(){
-  if(!shouldRepeatPromptAfterSpeechError())return Promise.resolve(false);
+function repeatQuestionPromptAfterSpeechError(forceReplay=false){
+  if(forceReplay){
+    if(isAutomaticPromptSpeechDisabled())return Promise.resolve(false);
+  }else if(!shouldRepeatPromptAfterSpeechError())return Promise.resolve(false);
   const questionIndex=currentIndex;
   return new Promise(resolve=>{
     setTimeout(async()=>{
@@ -2624,7 +2626,9 @@ function recognizeHanziSpeech({automatic=false,resumeSession=false}={}){
   }
   const SpeechRecognition=getBrowserSpeechRecognitionConstructor();
   if(!SpeechRecognition)return setStatus("hanziStatus","此瀏覽器不支援語音辨識，請改用最新版 Chrome、Edge 或 Safari。","error");
-  hanziSpeechSessionDeadline=Date.now()+SPEECH_RECOGNITION_INPUT_LIMIT;
+  if(!resumeSession||hanziSpeechSessionDeadline<=0){
+    hanziSpeechSessionDeadline=Date.now()+SPEECH_RECOGNITION_INPUT_LIMIT;
+  }
   clearHanziSpeechResumeTimer();
   stopPlatformSpeech();
   if(hanziSpeechRecognition)stopHanziSpeechRecognition(hanziSpeechRecognition,true,true);
@@ -2634,6 +2638,23 @@ function recognizeHanziSpeech({automatic=false,resumeSession=false}={}){
   recognition.maxAlternatives=5;
   let chromiumCandidates=[];
   let resultProcessing=false;
+  const handleNoSpeechTimeout=()=>{
+    if(hanziSpeechRecognition!==recognition)return;
+    stopHanziSpeechRecognition(recognition,true);
+    setStatus("hanziStatus",automatic?"10 秒內沒有語音輸入，正在重新播放題目。":"10 秒內沒有語音輸入，請再按一次麥克風按鈕。","error");
+    showCaptureFeedback("failure","再說一次",SPEECH_ERROR_FEEDBACK_DURATION);
+    playTaskErrorSound();
+    const repeatedPrompt=repeatQuestionPromptAfterSpeechError(true);
+    Promise.resolve(repeatedPrompt).finally(()=>{
+      if(automatic)scheduleAutomaticSpeechRecognition(180);
+    });
+  };
+  const armHanziSpeechInputTimer=(resetDeadline=true)=>{
+    if(hanziSpeechInputTimer)clearTimeout(hanziSpeechInputTimer);
+    if(resetDeadline)hanziSpeechSessionDeadline=Date.now()+SPEECH_RECOGNITION_INPUT_LIMIT;
+    const remaining=Math.max(0,hanziSpeechSessionDeadline-Date.now());
+    hanziSpeechInputTimer=setTimeout(handleNoSpeechTimeout,remaining);
+  };
   $("speakHanziBtn").disabled=false;
   $("speakHanziBtn").classList.add("is-listening");
   $("speakHanziBtn").title="停止語音辨識";
@@ -2647,13 +2668,7 @@ function recognizeHanziSpeech({automatic=false,resumeSession=false}={}){
       return;
     }
     setStatus("hanziStatus","正在聆聽，請念出畫面上的字…");
-    const remaining=Math.max(0,hanziSpeechSessionDeadline-Date.now());
-    hanziSpeechInputTimer=setTimeout(()=>{
-      if(hanziSpeechRecognition!==recognition)return;
-      stopHanziSpeechRecognition(recognition,true);
-      setStatus("hanziStatus",automatic?"語音辨識20秒逾時，正在繼續聆聽。":"語音辨識20秒逾時，請再按一次麥克風按鈕。","error");
-      if(automatic)scheduleAutomaticSpeechRecognition(550);
-    },remaining);
+    armHanziSpeechInputTimer(false);
   };
   recognition.onresult=async event=>{
     if(resultProcessing||hanziSpeechRecognition!==recognition||finished||paused||currentIndex>=task.targetClasses.length)return;
@@ -2667,6 +2682,7 @@ function recognizeHanziSpeech({automatic=false,resumeSession=false}={}){
         if(transcript)currentCandidates.push({transcript,confidence:Number(item.confidence||0)});
       }
     }
+    if(currentCandidates.some(item=>item.transcript))armHanziSpeechInputTimer();
     if(chromiumContinuous)chromiumCandidates=mergeChromiumSpeechCandidates(chromiumCandidates,currentCandidates);
     const alternatives=(chromiumContinuous?chromiumCandidates:currentCandidates).map(item=>item.transcript);
     if(!alternatives.length)return;
@@ -2726,9 +2742,7 @@ function recognizeHanziSpeech({automatic=false,resumeSession=false}={}){
     if(hanziSpeechRecognition!==recognition)return;
     const remaining=hanziSpeechSessionDeadline-Date.now();
     if(remaining<=0){
-      stopHanziSpeechRecognition(recognition,true);
-      setStatus("hanziStatus",automatic?"語音辨識20秒逾時，正在繼續聆聽。":"語音辨識20秒逾時，請再按一次麥克風按鈕。","error");
-      if(automatic)scheduleAutomaticSpeechRecognition(550);
+      handleNoSpeechTimeout();
       return;
     }
     stopHanziSpeechRecognition(recognition,true,true);
@@ -4872,7 +4886,9 @@ async function startOptionalAudioRecognition({automatic=false,resumeSession=fals
     return;
   }
 
-  optionalAudioSessionDeadline=Date.now()+SPEECH_RECOGNITION_INPUT_LIMIT;
+  if(!resumeSession||optionalAudioSessionDeadline<=0){
+    optionalAudioSessionDeadline=Date.now()+SPEECH_RECOGNITION_INPUT_LIMIT;
+  }
   clearOptionalAudioResumeTimer();
   stopPlatformSpeech();
   const recognition=rememberSpeechRecognition(new SpeechRecognition());
@@ -4911,15 +4927,10 @@ async function startOptionalAudioRecognition({automatic=false,resumeSession=fals
     }
     setVoiceResult("正在聆聽");
     updateVerificationUI();
-    const remaining=Math.max(0,optionalAudioSessionDeadline-Date.now());
-    optionalAudioTimer=setTimeout(()=>{
-      if(!settled&&optionalAudioListening){
-        failRecognition(automatic?"語音辨識20秒逾時，正在繼續聆聽。":"語音辨識20秒逾時，請按按鈕重新嘗試。");
-      }
-    },remaining);
+    armOptionalAudioInputTimer(false);
   };
 
-  const failRecognition=async(message,countTowardLimit=true,allowAutomaticRestart=true,repeatPrompt=false)=>{
+  const failRecognition=async(message,countTowardLimit=true,allowAutomaticRestart=true,repeatPrompt=false,forcePromptReplay=false)=>{
     if(settled)return;
     settled=true;
     stopOptionalAudioRecognition(false);
@@ -4927,19 +4938,36 @@ async function startOptionalAudioRecognition({automatic=false,resumeSession=fals
     updateVerificationUI();
     showCaptureFeedback("failure","再說一次",SPEECH_ERROR_FEEDBACK_DURATION);
     playTaskErrorSound();
-    const repeatedPrompt=repeatPrompt&&shouldRepeatPromptAfterSpeechError()
-      ? repeatQuestionPromptAfterSpeechError()
+    const repeatedPrompt=(forcePromptReplay||(repeatPrompt&&shouldRepeatPromptAfterSpeechError()))
+      ? repeatQuestionPromptAfterSpeechError(forcePromptReplay)
       : null;
     await recordOptionalAudioFailure(target,countTowardLimit,lastHeard);
     if(repeatedPrompt)await repeatedPrompt;
     if(automatic&&allowAutomaticRestart)scheduleAutomaticSpeechRecognition(550);
   };
 
+  const armOptionalAudioInputTimer=(resetDeadline=true)=>{
+    if(optionalAudioTimer)clearTimeout(optionalAudioTimer);
+    if(resetDeadline)optionalAudioSessionDeadline=Date.now()+SPEECH_RECOGNITION_INPUT_LIMIT;
+    const remaining=Math.max(0,optionalAudioSessionDeadline-Date.now());
+    optionalAudioTimer=setTimeout(()=>{
+      if(!settled&&optionalAudioListening){
+        failRecognition(
+          automatic?"10 秒內沒有語音輸入，正在重新播放題目。":"10 秒內沒有語音輸入，請按按鈕重新嘗試。",
+          true,
+          true,
+          false,
+          true
+        );
+      }
+    },remaining);
+  };
+
   const resumeRecognition=message=>{
     if(settled||browserSpeechRecognition!==recognition)return;
     const remaining=optionalAudioSessionDeadline-Date.now();
     if(remaining<=0){
-      failRecognition(automatic?"語音辨識20秒逾時，正在繼續聆聽。":"語音辨識20秒逾時，請按按鈕重新嘗試。");
+      failRecognition(automatic?"10 秒內沒有語音輸入，正在重新播放題目。":"10 秒內沒有語音輸入，請按按鈕重新嘗試。",true,true,false,true);
       return;
     }
     settled=true;
@@ -4968,6 +4996,7 @@ async function startOptionalAudioRecognition({automatic=false,resumeSession=fals
         });
       }
     }
+    if(currentCandidates.some(item=>item.transcript))armOptionalAudioInputTimer();
     if(chromiumContinuous)chromiumCandidates=mergeChromiumSpeechCandidates(chromiumCandidates,currentCandidates);
     const alternatives=chromiumContinuous?chromiumCandidates:currentCandidates;
     lastHeard=alternatives[0]?.transcript||"";
