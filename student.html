@@ -1590,10 +1590,10 @@ function switchAutomaticSpeechRecognitionToButton(){
   clearAutomaticSpeechIdleTimer(false);
   if(isSpeakingMode()){
     stopHanziSpeechRecognition(hanziSpeechRecognition,true);
-    setStatus("hanziStatus","60 秒內未偵測到語音，請按麥克風按鈕繼續辨識。","error");
+    setStatus("hanziStatus","本題自動語音辨識已達 60 秒，請按麥克風按鈕繼續辨識。","error");
   }else if(isReadingMode()){
     stopOptionalAudioRecognition(true);
-    setVoiceResult("60 秒內未偵測到語音，請按麥克風按鈕繼續辨識。","error");
+    setVoiceResult("本題自動語音辨識已達 60 秒，請按麥克風按鈕繼續辨識。","error");
   }
 }
 
@@ -1612,7 +1612,6 @@ function armAutomaticSpeechIdleTimer(){
 
 function noteAutomaticSpeechInput(){
   if(!shouldAutomaticallyRecognizeSpeech())return;
-  clearAutomaticSpeechIdleTimer(false);
   armAutomaticSpeechIdleTimer();
 }
 
