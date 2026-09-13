@@ -2655,6 +2655,13 @@ function recognizeHanziSpeech({automatic=false,resumeSession=false}={}){
     const remaining=Math.max(0,hanziSpeechSessionDeadline-Date.now());
     hanziSpeechInputTimer=setTimeout(handleNoSpeechTimeout,remaining);
   };
+  const pauseHanziSpeechInputTimer=()=>{
+    if(hanziSpeechInputTimer){
+      clearTimeout(hanziSpeechInputTimer);
+      hanziSpeechInputTimer=null;
+    }
+    hanziSpeechSessionDeadline=-1;
+  };
   $("speakHanziBtn").disabled=false;
   $("speakHanziBtn").classList.add("is-listening");
   $("speakHanziBtn").title="停止語音辨識";
@@ -2682,7 +2689,7 @@ function recognizeHanziSpeech({automatic=false,resumeSession=false}={}){
         if(transcript)currentCandidates.push({transcript,confidence:Number(item.confidence||0)});
       }
     }
-    if(currentCandidates.some(item=>item.transcript))armHanziSpeechInputTimer();
+    if(currentCandidates.some(item=>item.transcript))pauseHanziSpeechInputTimer();
     if(chromiumContinuous)chromiumCandidates=mergeChromiumSpeechCandidates(chromiumCandidates,currentCandidates);
     const alternatives=(chromiumContinuous?chromiumCandidates:currentCandidates).map(item=>item.transcript);
     if(!alternatives.length)return;
@@ -2721,6 +2728,7 @@ function recognizeHanziSpeech({automatic=false,resumeSession=false}={}){
           if(automatic)scheduleAutomaticSpeechRecognition(180);
         }else if(chromiumContinuous&&hanziSpeechRecognition===recognition){
           chromiumCandidates=[];
+          armHanziSpeechInputTimer();
           setTimeout(()=>{
             if(hanziSpeechRecognition===recognition&&!finished&&!paused)setStatus("hanziStatus","正在持續聆聽，請再說一次…");
           },900);
@@ -2740,6 +2748,16 @@ function recognizeHanziSpeech({automatic=false,resumeSession=false}={}){
   };
   const resumeRecognition=message=>{
     if(hanziSpeechRecognition!==recognition)return;
+    if(hanziSpeechSessionDeadline<0){
+      stopHanziSpeechRecognition(recognition,true);
+      setStatus("hanziStatus",message||"正在接續語音辨識，請繼續回答…");
+      hanziSpeechResumeTimer=setTimeout(()=>{
+        hanziSpeechResumeTimer=null;
+        if(finished||paused||pageAutoPaused||exitInProgress||document.hidden)return;
+        recognizeHanziSpeech({automatic,resumeSession:false});
+      },speechRecognitionResumeDelay());
+      return;
+    }
     const remaining=hanziSpeechSessionDeadline-Date.now();
     if(remaining<=0){
       handleNoSpeechTimeout();
@@ -4962,9 +4980,28 @@ async function startOptionalAudioRecognition({automatic=false,resumeSession=fals
       }
     },remaining);
   };
+  const pauseOptionalAudioInputTimer=()=>{
+    if(optionalAudioTimer){
+      clearTimeout(optionalAudioTimer);
+      optionalAudioTimer=null;
+    }
+    optionalAudioSessionDeadline=-1;
+  };
 
   const resumeRecognition=message=>{
     if(settled||browserSpeechRecognition!==recognition)return;
+    if(optionalAudioSessionDeadline<0){
+      settled=true;
+      stopOptionalAudioRecognition(false);
+      setVoiceResult(message||"正在接續語音辨識，請繼續回答…");
+      updateVerificationUI();
+      optionalAudioResumeTimer=setTimeout(()=>{
+        optionalAudioResumeTimer=null;
+        if(finished||paused||pageAutoPaused||exitInProgress||document.hidden)return;
+        startOptionalAudioRecognition({automatic,resumeSession:false});
+      },speechRecognitionResumeDelay());
+      return;
+    }
     const remaining=optionalAudioSessionDeadline-Date.now();
     if(remaining<=0){
       failRecognition(automatic?"10 秒內沒有語音輸入，正在重新播放題目。":"10 秒內沒有語音輸入，請按按鈕重新嘗試。",true,true,false,true);
@@ -4996,7 +5033,7 @@ async function startOptionalAudioRecognition({automatic=false,resumeSession=fals
         });
       }
     }
-    if(currentCandidates.some(item=>item.transcript))armOptionalAudioInputTimer();
+    if(currentCandidates.some(item=>item.transcript))pauseOptionalAudioInputTimer();
     if(chromiumContinuous)chromiumCandidates=mergeChromiumSpeechCandidates(chromiumCandidates,currentCandidates);
     const alternatives=chromiumContinuous?chromiumCandidates:currentCandidates;
     lastHeard=alternatives[0]?.transcript||"";
@@ -5025,6 +5062,8 @@ async function startOptionalAudioRecognition({automatic=false,resumeSession=fals
         if(repeatedPrompt){
           await repeatedPrompt;
           if(automatic)scheduleAutomaticSpeechRecognition(180);
+        }else if(!settled&&optionalAudioListening){
+          armOptionalAudioInputTimer();
         }
         resultProcessing=false;
         if(!settled&&optionalAudioListening)setVoiceResult("正在聆聽");
