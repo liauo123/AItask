@@ -957,7 +957,8 @@ function unlockPlatformSpeech(){
   if(platformSpeechUnlocked)return;
   platformSpeechUnlocked=true;
   try{
-    const utterance=new SpeechSynthesisUtterance(" ");
+    // Safari 會忽略只含空白的語句，使後續自動題目語音仍被阻擋。
+    const utterance=new SpeechSynthesisUtterance("準備");
     utterance.lang="zh-TW";
     utterance.volume=0;
     utterance.rate=10;
@@ -1588,9 +1589,31 @@ function getCurrentQuestionSpeechConfig(){
 }
 
 function primeSafariFirstQuestionSpeech(){
-  if(!isSafariBrowser())return false;
-  // Safari 需在使用者手勢中先解鎖語音，但不可在任務畫面出現前播放真正題目。
-  unlockPlatformSpeech();
+  if(!isSafariBrowser()||!task||isAutomaticPromptSpeechDisabled())return false;
+  const savedIndex=currentIndex;
+  if(currentIndex>=task.targetClasses.length)currentIndex=0;
+  const config=getCurrentQuestionSpeechConfig();
+  currentIndex=savedIndex;
+  if(!config)return false;
+  // 在開始按鈕的同一次使用者操作中，以靜音題目句啟動 Safari 語音引擎。
+  // 真正題目仍由任務畫面完成後的原有流程播放，不會再發生語音先於畫面。
+  try{
+    const synthesis=window.speechSynthesis;
+    synthesis.cancel();
+    synthesis.resume();
+    refreshPlatformSpeechVoice();
+    const utterance=new SpeechSynthesisUtterance(config.text);
+    utterance.lang="zh-TW";
+    utterance.rate=10;
+    utterance.volume=0;
+    const voice=preferredPlatformVoice||refreshPlatformSpeechVoice();
+    if(voice)utterance.voice=voice;
+    synthesis.speak(utterance);
+    platformSpeechUnlocked=true;
+  }catch(e){
+    platformSpeechUnlocked=false;
+    return false;
+  }
   safariPrimedSpeechText="";
   safariPrimedSpeechPromise=null;
   return true;
