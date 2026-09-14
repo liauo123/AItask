@@ -13,20 +13,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 
-<!-- TensorFlow.js 與 Teachable Machine 三種專案 -->
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/speech-commands@0.4.0/dist/speech-commands.min.js"></script>
 <!-- 中文發音比對元件：專案內檔案優先，外部 CDN 僅作備援。 -->
 <script src="./pinyin-pro.min.js"></script>
-<script>
-if(!window.pinyinPro){
-  document.write('<script src="https://cdn.jsdelivr.net/npm/pinyin-pro@3.28.2/dist/index.min.js"><\/script>');
-}
-</script>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js"></script>
 
 <style>
 :root{
@@ -751,6 +739,54 @@ const firestorePersistenceReady=db.enablePersistence({synchronizeTabs:true}).cat
   }
 });
 
+const runtimeScriptPromises=new Map();
+const RUNTIME_SCRIPT_URLS={
+  tensorflow:"https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js",
+  coco:"https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js",
+  tmImage:"https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js",
+  tmPose:"https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js",
+  speechCommands:"https://cdn.jsdelivr.net/npm/@tensorflow-models/speech-commands@0.4.0/dist/speech-commands.min.js",
+  tesseract:"https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js",
+  pinyin:"https://cdn.jsdelivr.net/npm/pinyin-pro@3.28.2/dist/index.min.js"
+};
+
+function waitWithTimeout(promise,timeoutMs,message){
+  let timer=null;
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise((_,reject)=>{
+      timer=setTimeout(()=>reject(new Error(message)),timeoutMs);
+    })
+  ]).finally(()=>{if(timer)clearTimeout(timer)});
+}
+
+function loadRuntimeScript(url,globalName,label){
+  if(globalName&&window[globalName])return Promise.resolve(true);
+  if(runtimeScriptPromises.has(url))return runtimeScriptPromises.get(url);
+  const promise=new Promise((resolve,reject)=>{
+    const script=document.createElement("script");
+    let settled=false;
+    const finish=(success,error)=>{
+      if(settled)return;
+      settled=true;
+      clearTimeout(timer);
+      if(success&&(!globalName||window[globalName]))resolve(true);
+      else reject(error||new Error(`${label}載入失敗`));
+    };
+    const timer=setTimeout(()=>finish(false,new Error(`${label}載入逾時，請檢查網路後重試。`)),20000);
+    script.src=url;
+    script.async=true;
+    script.onload=()=>finish(true);
+    script.onerror=()=>finish(false,new Error(`${label}載入失敗，請檢查網路後重試。`));
+    document.head.appendChild(script);
+  }).catch(error=>{
+    runtimeScriptPromises.delete(url);
+    throw error;
+  });
+  runtimeScriptPromises.set(url,promise);
+  return promise;
+}
+
 let buttonSoundContext=null;
 function playButtonPressSound(){
   try{
@@ -837,6 +873,9 @@ const trackedMicrophoneTracks=new Set();
 const trackedCameraTracks=new Set();
 let microphoneStreamTrackerInstalled=false;
 let chromiumSpeechPermissionPrimed=false;
+let browserSpeechPermissionPrimed=false;
+let hanziSpeechReconnectFailures=0;
+let optionalSpeechReconnectFailures=0;
 let mediaRequestsBlocked=false;
 let platformSpeechUnlocked=false;
 let platformSpeechRequestId=0;
@@ -852,10 +891,33 @@ const AUTOMATIC_SPEECH_IDLE_LIMIT=60000;
 const SPEECH_RECOGNITION_INPUT_LIMIT=10000;
 const SPEECH_ERROR_FEEDBACK_DURATION=1500;
 const CHROMIUM_SPEECH_CANDIDATE_LIMIT=15;
+const SPEECH_RECONNECT_DELAYS=[500,1000,2000];
 
 function isDesktopChromiumSpeechBrowser(){
   const ua=String(navigator.userAgent||"");
   return /(?:Chrome|Chromium|Edg)\//.test(ua)&&!/(?:iPhone|iPad|iPod|CriOS|EdgiOS)\b/.test(ua);
+}
+
+function isIPadWebKitBrowser(){
+  const ua=String(navigator.userAgent||"");
+  return /iPad|iPhone|iPod/i.test(ua)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+}
+
+function speechRecognitionAfterPromptDelay(){
+  return isIPadWebKitBrowser()?700:180;
+}
+
+function resetSpeechReconnectFailures(type="all"){
+  if(type==="all"||type==="hanzi")hanziSpeechReconnectFailures=0;
+  if(type==="all"||type==="optional")optionalSpeechReconnectFailures=0;
+}
+
+function takeSpeechReconnectDelay(type){
+  const attempts=type==="hanzi"?hanziSpeechReconnectFailures:optionalSpeechReconnectFailures;
+  if(attempts>=SPEECH_RECONNECT_DELAYS.length)return null;
+  if(type==="hanzi")hanziSpeechReconnectFailures++;
+  else optionalSpeechReconnectFailures++;
+  return SPEECH_RECONNECT_DELAYS[attempts];
 }
 
 function speechRecognitionResumeDelay(){
@@ -1095,6 +1157,31 @@ async function primeChromiumSpeechMicrophone(){
   }
 }
 
+function taskUsesBrowserSpeechRecognition(){
+  if(!task)return false;
+  if(isSpeakingMode()||isReadingMode())return true;
+  return getEffectiveAudioRequiredClasses().length>0;
+}
+
+async function primeBrowserSpeechMicrophoneFromGesture(){
+  if(browserSpeechPermissionPrimed||!taskUsesBrowserSpeechRecognition())return true;
+  const mediaDevices=navigator.mediaDevices;
+  if(!mediaDevices||typeof mediaDevices.getUserMedia!=="function")return false;
+  try{
+    const stream=await mediaDevices.getUserMedia({
+      audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},
+      video:false
+    });
+    stream.getTracks().forEach(track=>track.stop());
+    browserSpeechPermissionPrimed=true;
+    chromiumSpeechPermissionPrimed=true;
+    return true;
+  }catch(error){
+    console.warn("麥克風權限啟用失敗",error);
+    return false;
+  }
+}
+
 function stopTrackedMicrophoneTracks(){
   trackedMicrophoneStreams.forEach(stream=>{
     try{
@@ -1287,7 +1374,44 @@ function playTaskErrorSound(){
 }
 function norm(url){url=(url||"").trim();return url.endsWith("/")?url:url+"/"}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
-async function ensureAuth(){if(auth.currentUser)return auth.currentUser;return(await auth.signInAnonymously()).user}
+async function ensureAuth(){
+  if(auth.currentUser)return auth.currentUser;
+  const credential=await waitWithTimeout(auth.signInAnonymously(),12000,"登入服務回應逾時，請檢查網路後重試。");
+  return credential.user;
+}
+
+async function waitForFirestorePersistence(){
+  try{
+    await waitWithTimeout(firestorePersistenceReady,4000,"本機快取準備逾時");
+  }catch(error){
+    console.warn("略過尚未完成的 Firestore 本機快取，改用線上讀取。",error);
+  }
+}
+
+async function ensureTaskRuntimeLibraries(){
+  const needsPinyin=taskUsesBrowserSpeechRecognition()&&task.targetClasses.some(requiresMandarinPinyin);
+  if(needsPinyin&&!isPinyinLibraryReady()){
+    setStatus("loadStatus","正在載入中文語音比對元件…");
+    await loadRuntimeScript(RUNTIME_SCRIPT_URLS.pinyin,"pinyinPro","中文語音比對元件");
+  }
+  if(isClickMode()||isHanziMode()||isSpeechOnlyRecognition())return;
+  if(task.recognitionEngine==="ocr"){
+    setStatus("loadStatus","正在載入文字辨識元件…");
+    await loadRuntimeScript(RUNTIME_SCRIPT_URLS.tesseract,"Tesseract","文字辨識元件");
+    return;
+  }
+  setStatus("loadStatus","正在載入此任務需要的辨識元件…");
+  await loadRuntimeScript(RUNTIME_SCRIPT_URLS.tensorflow,"tf","TensorFlow 元件");
+  if(task.recognitionEngine==="coco-ssd"){
+    await loadRuntimeScript(RUNTIME_SCRIPT_URLS.coco,"cocoSsd","COCO-SSD 元件");
+  }else if(projectType==="image"){
+    await loadRuntimeScript(RUNTIME_SCRIPT_URLS.tmImage,"tmImage","圖片辨識元件");
+  }else if(projectType==="pose"){
+    await loadRuntimeScript(RUNTIME_SCRIPT_URLS.tmPose,"tmPose","姿勢辨識元件");
+  }else if(projectType==="audio"){
+    await loadRuntimeScript(RUNTIME_SCRIPT_URLS.speechCommands,"speechCommands","音訊辨識元件");
+  }
+}
 function isCocoRecognition(){
   return !!(task&&task.recognitionEngine==="coco-ssd");
 }
@@ -1580,6 +1704,7 @@ function clearAutomaticSpeechIdleTimer(resetFallback=false){
 function resetAutomaticSpeechRecognitionForCurrentQuestion(){
   clearAutomaticSpeechRestartTimer();
   clearAutomaticSpeechIdleTimer(true);
+  resetSpeechReconnectFailures();
 }
 
 function switchAutomaticSpeechRecognitionToButton(){
@@ -1801,7 +1926,7 @@ function updateVerificationUI(){
   $("photoVerificationBadge").classList.toggle("done",currentImagePassed);
   $("voiceVerificationBadge").classList.toggle("done",currentAudioPassed);
   $("voiceRecognizeBtn").disabled=currentAudioPassed||taskSuccessAnimating;
-  $("voiceRecognizeBtn").classList.toggle("is-listening",optionalAudioListening||optionalAudioStarting);
+  $("voiceRecognizeBtn").classList.toggle("is-listening",optionalAudioListening&&!optionalAudioStarting);
   $("voiceRecognizeBtn").title=optionalAudioListening||optionalAudioStarting?"停止語音辨識":"開始語音辨識";
 }
 
@@ -1899,7 +2024,7 @@ function prepareAdvancedPrompt(autoSpeak=true){
     }else if(currentAdvancedDescription){
       scheduleQuestionAutoSpeech(async()=>{
         await speakAdvancedPrompt(true);
-        scheduleAutomaticSpeechRecognition(180);
+        scheduleAutomaticSpeechRecognition(speechRecognitionAfterPromptDelay());
       },250);
     }else{
       scheduleAutomaticSpeechRecognition(300);
@@ -1976,7 +2101,11 @@ function speakTeachingDescription(){
 
 
 async function detectProjectType(modelURL){
-  const response=await fetch(modelURL+"metadata.json",{cache:"no-store"});
+  const response=await waitWithTimeout(
+    fetch(modelURL+"metadata.json",{cache:"no-store"}),
+    15000,
+    "模型資料讀取逾時，請檢查網路後重試。"
+  );
   if(!response.ok)throw new Error("無法讀取 metadata.json");
   const data=await response.json();
   const text=JSON.stringify(data).toLowerCase();
@@ -1996,11 +2125,17 @@ async function loadTask(){
   if(!taskId)return setStatus("loadStatus","請輸入任務代碼。","error");
 
   $("loadBtn").disabled=true;
-  setStatus("loadStatus","正在讀取 Firebase 任務…");
+  setStatus("loadStatus","正在連線並登入…");
   try{
     await ensureAuth();
-    await firestorePersistenceReady;
-    const snap=await db.collection("tasks").doc(taskId).get();
+    setStatus("loadStatus","正在準備任務資料…");
+    await waitForFirestorePersistence();
+    setStatus("loadStatus","正在取得任務內容…");
+    const snap=await waitWithTimeout(
+      db.collection("tasks").doc(taskId).get(),
+      15000,
+      "任務讀取逾時，請確認網路後按「載入任務」重試。"
+    );
     if(!snap.exists)throw new Error("找不到此任務");
     task={id:snap.id,...snap.data()};
     if(task.status!=="active")throw new Error("任務目前未開放");
@@ -2057,6 +2192,8 @@ async function loadTask(){
     task.disableAutoPromptSpeech=(isSpeakingMode()||isReadingMode())&&!!task.disableAutoPromptSpeech;
     task.buttonSpeechRecognition=(isSpeakingMode()||isReadingMode())&&!!task.buttonSpeechRecognition;
     task.repeatPromptAfterSpeechError=(isSpeakingMode()||isReadingMode())&&!!task.repeatPromptAfterSpeechError;
+    browserSpeechPermissionPrimed=false;
+    resetSpeechReconnectFailures();
     task.clickDisplaySeconds=Math.min(10,Math.max(3,Number(task.clickDisplaySeconds||5)));
     task.clickRepeatCount=Math.min(5,Math.max(3,Number(task.clickRepeatCount||3)));
     task.clickSimultaneousCount=Math.min(3,Math.max(1,Number(task.clickSimultaneousCount||1)),task.targetClasses.length);
@@ -2100,6 +2237,7 @@ async function loadTask(){
       projectType=detected.type;
       metadata=detected.metadata;
     }
+    await ensureTaskRuntimeLibraries();
 
     const typeName=isSpeakingMode()?"口語模式":isHanziMode()?"書寫模式":isClickMode()?"點選模式":task.recognitionEngine==="coco-ssd"
       ?"COCO-SSD 開放辨識"
@@ -2484,7 +2622,7 @@ function renderHanziQuestion(){
     }else{
       scheduleQuestionAutoSpeech(async()=>{
         await speakHanziPrompt(false,true);
-        scheduleAutomaticSpeechRecognition(180);
+        scheduleAutomaticSpeechRecognition(speechRecognitionAfterPromptDelay());
       },300);
     }
   }else if(!isAutomaticPromptSpeechDisabled()){
@@ -2650,7 +2788,7 @@ function recognizeHanziSpeech({automatic=false,resumeSession=false,continuedSpee
     playTaskErrorSound();
     const repeatedPrompt=repeatQuestionPromptAfterSpeechError(true);
     Promise.resolve(repeatedPrompt).finally(()=>{
-      if(automatic)scheduleAutomaticSpeechRecognition(180);
+      if(automatic)scheduleAutomaticSpeechRecognition(speechRecognitionAfterPromptDelay());
     });
   };
   const armHanziSpeechInputTimer=(resetDeadline=true)=>{
@@ -2667,8 +2805,8 @@ function recognizeHanziSpeech({automatic=false,resumeSession=false,continuedSpee
     hanziSpeechSessionDeadline=-1;
   };
   $("speakHanziBtn").disabled=false;
-  $("speakHanziBtn").classList.add("is-listening");
-  $("speakHanziBtn").title="停止語音辨識";
+  $("speakHanziBtn").classList.remove("is-listening");
+  $("speakHanziBtn").title="正在啟動語音辨識";
   setStatus("hanziStatus","正在啟動麥克風…");
   recognition.onstart=()=>{
     hanziSpeechStarting=false;
@@ -2678,11 +2816,14 @@ function recognizeHanziSpeech({automatic=false,resumeSession=false,continuedSpee
       setStatus("hanziStatus","語音辨識已停止，請再按一次麥克風按鈕。","error");
       return;
     }
+    $("speakHanziBtn").classList.add("is-listening");
+    $("speakHanziBtn").title="停止語音辨識";
     setStatus("hanziStatus","正在聆聽，請念出畫面上的字…");
     armHanziSpeechInputTimer(false);
   };
   recognition.onspeechstart=()=>{
     if(hanziSpeechRecognition!==recognition||finished||paused)return;
+    resetSpeechReconnectFailures("hanzi");
     pauseHanziSpeechInputTimer();
     setStatus("hanziStatus","已偵測到語音，請繼續說完…");
   };
@@ -2698,7 +2839,10 @@ function recognizeHanziSpeech({automatic=false,resumeSession=false,continuedSpee
         if(transcript)currentCandidates.push({transcript,confidence:Number(item.confidence||0)});
       }
     }
-    if(currentCandidates.some(item=>item.transcript))pauseHanziSpeechInputTimer();
+    if(currentCandidates.some(item=>item.transcript)){
+      resetSpeechReconnectFailures("hanzi");
+      pauseHanziSpeechInputTimer();
+    }
     const continuedCandidates=speechContinuationPrefix
       ?currentCandidates.flatMap(item=>[
           {transcript:`${speechContinuationPrefix} ${item.transcript}`.trim(),confidence:item.confidence},
@@ -2741,7 +2885,7 @@ function recognizeHanziSpeech({automatic=false,resumeSession=false,continuedSpee
         setStatus("hanziStatus",`聽到「${alternatives[0]||""}」，請再試一次（已答錯 ${consecutiveWrongAttempts} 次）。`,"error");
         if(repeatedPrompt){
           await repeatedPrompt;
-          if(automatic)scheduleAutomaticSpeechRecognition(180);
+          if(automatic)scheduleAutomaticSpeechRecognition(speechRecognitionAfterPromptDelay());
         }else if(chromiumContinuous&&hanziSpeechRecognition===recognition){
           chromiumCandidates=[];
           armHanziSpeechInputTimer();
@@ -2764,6 +2908,18 @@ function recognizeHanziSpeech({automatic=false,resumeSession=false,continuedSpee
   };
   const resumeRecognition=message=>{
     if(hanziSpeechRecognition!==recognition)return;
+    const remaining=hanziSpeechSessionDeadline-Date.now();
+    if(hanziSpeechSessionDeadline>=0&&remaining<=0){
+      handleNoSpeechTimeout();
+      return;
+    }
+    const reconnectDelay=takeSpeechReconnectDelay("hanzi");
+    if(reconnectDelay===null){
+      stopHanziSpeechRecognition(recognition,true);
+      if(automatic)automaticSpeechFallbackToButton=true;
+      setStatus("hanziStatus","語音辨識連線多次未成功，請按麥克風按鈕重新辨識。","error");
+      return;
+    }
     if(hanziSpeechSessionDeadline<0){
       const continuedText=chromiumCandidates[0]?.transcript||lastHanziHeard||speechContinuationPrefix;
       stopHanziSpeechRecognition(recognition,true);
@@ -2772,12 +2928,7 @@ function recognizeHanziSpeech({automatic=false,resumeSession=false,continuedSpee
         hanziSpeechResumeTimer=null;
         if(finished||paused||pageAutoPaused||exitInProgress||document.hidden)return;
         recognizeHanziSpeech({automatic,resumeSession:false,continuedSpeechText:continuedText});
-      },speechRecognitionResumeDelay());
-      return;
-    }
-    const remaining=hanziSpeechSessionDeadline-Date.now();
-    if(remaining<=0){
-      handleNoSpeechTimeout();
+      },reconnectDelay);
       return;
     }
     stopHanziSpeechRecognition(recognition,true,true);
@@ -2786,7 +2937,7 @@ function recognizeHanziSpeech({automatic=false,resumeSession=false,continuedSpee
       hanziSpeechResumeTimer=null;
       if(finished||paused||pageAutoPaused||exitInProgress||document.hidden)return;
       recognizeHanziSpeech({automatic,resumeSession:true});
-    },speechRecognitionResumeDelay());
+    },reconnectDelay);
   };
   recognition.onerror=event=>{
     const error=event.error||"請再試一次";
@@ -4947,7 +5098,7 @@ async function startOptionalAudioRecognition({automatic=false,resumeSession=fals
   recognition.maxAlternatives=5;
 
   updateVerificationUI();
-  setVoiceResult("正在聆聽");
+  setVoiceResult("正在啟動麥克風…");
   recognition.onstart=()=>{
     optionalAudioStarting=false;
     if(optionalAudioStartWatchdog){clearTimeout(optionalAudioStartWatchdog);optionalAudioStartWatchdog=null}
@@ -4970,6 +5121,7 @@ async function startOptionalAudioRecognition({automatic=false,resumeSession=fals
   };
   recognition.onspeechstart=()=>{
     if(settled||browserSpeechRecognition!==recognition||!optionalAudioListening||finished||paused)return;
+    resetSpeechReconnectFailures("optional");
     pauseOptionalAudioInputTimer();
     setVoiceResult("已偵測到語音，請繼續說完…");
     updateVerificationUI();
@@ -5017,6 +5169,20 @@ async function startOptionalAudioRecognition({automatic=false,resumeSession=fals
 
   const resumeRecognition=message=>{
     if(settled||browserSpeechRecognition!==recognition)return;
+    const remaining=optionalAudioSessionDeadline-Date.now();
+    if(optionalAudioSessionDeadline>=0&&remaining<=0){
+      failRecognition(automatic?"10 秒內沒有語音輸入，正在重新播放題目。":"10 秒內沒有語音輸入，請按按鈕重新嘗試。",true,true,false,true);
+      return;
+    }
+    const reconnectDelay=takeSpeechReconnectDelay("optional");
+    if(reconnectDelay===null){
+      settled=true;
+      stopOptionalAudioRecognition(false);
+      if(automatic)automaticSpeechFallbackToButton=true;
+      setVoiceResult("語音辨識連線多次未成功，請按麥克風按鈕重新辨識。","error");
+      updateVerificationUI();
+      return;
+    }
     if(optionalAudioSessionDeadline<0){
       const continuedText=lastHeard||chromiumCandidates[0]?.transcript||speechContinuationPrefix;
       settled=true;
@@ -5027,12 +5193,7 @@ async function startOptionalAudioRecognition({automatic=false,resumeSession=fals
         optionalAudioResumeTimer=null;
         if(finished||paused||pageAutoPaused||exitInProgress||document.hidden)return;
         startOptionalAudioRecognition({automatic,resumeSession:false,continuedSpeechText:continuedText});
-      },speechRecognitionResumeDelay());
-      return;
-    }
-    const remaining=optionalAudioSessionDeadline-Date.now();
-    if(remaining<=0){
-      failRecognition(automatic?"10 秒內沒有語音輸入，正在重新播放題目。":"10 秒內沒有語音輸入，請按按鈕重新嘗試。",true,true,false,true);
+      },reconnectDelay);
       return;
     }
     settled=true;
@@ -5043,7 +5204,7 @@ async function startOptionalAudioRecognition({automatic=false,resumeSession=fals
       optionalAudioResumeTimer=null;
       if(finished||paused||pageAutoPaused||exitInProgress||document.hidden)return;
       startOptionalAudioRecognition({automatic,resumeSession:true});
-    },speechRecognitionResumeDelay());
+    },reconnectDelay);
   };
 
   recognition.onresult=async event=>{
@@ -5061,7 +5222,10 @@ async function startOptionalAudioRecognition({automatic=false,resumeSession=fals
         });
       }
     }
-    if(currentCandidates.some(item=>item.transcript))pauseOptionalAudioInputTimer();
+    if(currentCandidates.some(item=>item.transcript)){
+      resetSpeechReconnectFailures("optional");
+      pauseOptionalAudioInputTimer();
+    }
     const continuedCandidates=speechContinuationPrefix
       ?currentCandidates.flatMap(item=>[
           {transcript:`${speechContinuationPrefix} ${item.transcript}`.trim(),confidence:item.confidence},
@@ -5096,7 +5260,7 @@ async function startOptionalAudioRecognition({automatic=false,resumeSession=fals
         await recordOptionalAudioFailure(target,true,heardText);
         if(repeatedPrompt){
           await repeatedPrompt;
-          if(automatic)scheduleAutomaticSpeechRecognition(180);
+          if(automatic)scheduleAutomaticSpeechRecognition(speechRecognitionAfterPromptDelay());
         }else if(!settled&&optionalAudioListening){
           armOptionalAudioInputTimer();
         }
@@ -5876,6 +6040,7 @@ function handleOptionalSpeechButton(){
     setVoiceResult("語音辨識已停止，請再按一次重新辨識。");
     return;
   }
+  resetSpeechReconnectFailures("optional");
   return startOptionalAudioRecognition();
 }
 
@@ -5890,7 +6055,19 @@ function handleHanziSpeechButton(){
     setStatus("hanziStatus","語音辨識已停止，請再按一次重新辨識。");
     return;
   }
+  resetSpeechReconnectFailures("hanzi");
   return recognizeHanziSpeech();
+}
+
+async function handleStartButtonClick(){
+  if(!primeSafariFirstQuestionSpeech())unlockPlatformSpeech();
+  const needsMicrophone=taskUsesBrowserSpeechRecognition();
+  const microphoneReady=await primeBrowserSpeechMicrophoneFromGesture();
+  if(needsMicrophone&&!microphoneReady){
+    setStatus("joinStatus","無法啟用麥克風，請在瀏覽器網站設定中允許麥克風後再試一次。","error");
+    return;
+  }
+  return isGameMode()?requestGameJoin():startTask();
 }
 
 $("speakTeachingBtn").onclick=speakTeachingLabel;
@@ -5900,7 +6077,7 @@ $("speakDescriptionBtnTop").onclick=speakTeachingDescription;
 $("repeatAdvancedPromptBtn").onclick=()=>{markQuestionPromptInteraction();return speakAdvancedPrompt()};
 $("speakEvaluationTargetBtn").onclick=()=>{markQuestionPromptInteraction();return speakEvaluationTarget()};
 $("loadBtn").onclick=loadTask;
-$("startBtn").onclick=()=>{if(!primeSafariFirstQuestionSpeech())unlockPlatformSpeech();return isGameMode()?requestGameJoin():startTask()};
+$("startBtn").onclick=handleStartButtonClick;
 $("captureBtn").onclick=captureAndRecognize;
 $("voiceRecognizeBtn").onclick=handleOptionalSpeechButton;
 $("repeatHanziPromptBtn").onclick=()=>{markQuestionPromptInteraction();return speakHanziPrompt(true)};
