@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#2563eb">
-<title>AI學習任務平台</title>
+<title>學習任務平台</title>
 <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 
@@ -3227,15 +3227,15 @@ async function saveClickProgress(completedStatus=false){
   if(!resultRef||studentLeaveConfirmed||exitInProgress||pageAutoPaused)return;
   const correct=clickRecords.filter(record=>record.result==="correct");
   const misses=clickRecords.filter(record=>record.result==="timeout");
-  const averageReactionMs=correct.length
-    ? Math.round(correct.reduce((sum,record)=>sum+Number(record.reactionMs||0),0)/correct.length)
+  const averageReactionSeconds=correct.length
+    ? Number((correct.reduce((sum,record)=>sum+Number(record.reactionMs||0),0)/correct.length/1000).toFixed(2))
     : 0;
   const progress=Math.round(clickRecords.length/Math.max(1,getClickTotalCount())*100);
   await resultRef.update({
     clickCorrectCount:correct.length,
     clickWrongCount,
     clickMissCount:misses.length,
-    clickAverageReactionMs:averageReactionMs,
+    clickAverageReactionSeconds:averageReactionSeconds,
     progress,
     attempts:clickRecords.length,
     status:completedStatus?"completed":"inProgress",
@@ -3264,8 +3264,10 @@ async function finishClickMode(){
   $("rankDisplay").classList.add("hidden");
   const correct=clickRecords.filter(record=>record.result==="correct");
   const misses=clickRecords.filter(record=>record.result==="timeout");
-  const average=correct.length?Math.round(correct.reduce((sum,record)=>sum+record.reactionMs,0)/correct.length):0;
-  $("completeMessage").textContent=`答對 ${correct.length} 次，未在時間內點選 ${misses.length} 次，平均點選時間 ${average?average+" 毫秒":"—"}；紀錄已回傳教師端。`;
+  const averageSeconds=correct.length
+    ? correct.reduce((sum,record)=>sum+Number(record.reactionMs||0),0)/correct.length/1000
+    : 0;
+  $("completeMessage").textContent=`答對 ${correct.length} 次，未在時間內點選 ${misses.length} 次，平均點選時間 ${averageSeconds?averageSeconds.toFixed(2)+" 秒":"—"}；紀錄已回傳教師端。`;
   $("incorrectSummary").classList.add("hidden");
 }
 
@@ -3398,7 +3400,7 @@ async function startClickMode(){
       clickCorrectCount:0,
       clickWrongCount:0,
       clickMissCount:0,
-      clickAverageReactionMs:0,
+      clickAverageReactionSeconds:0,
       progress:0,
       attempts:0,
       status:"inProgress",

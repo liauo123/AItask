@@ -400,6 +400,13 @@ modeTabs.forEach(btn=>btn.addEventListener("click",()=>{
   syncActiveResultListeners();
 }));
 
+function getClickAverageSeconds(data){
+  const seconds=Number(data.clickAverageReactionSeconds||0);
+  if(Number.isFinite(seconds)&&seconds>0)return seconds;
+  const legacyMilliseconds=Number(data.clickAverageReactionMs||0);
+  return Number.isFinite(legacyMilliseconds)&&legacyMilliseconds>0?legacyMilliseconds/1000:0;
+}
+
 async function render(docs){
   const generation=++renderGeneration;
   const getTime=doc=>{
@@ -602,7 +609,7 @@ async function render(docs){
     }catch(e){resultError=e.message||String(e)}
     const studentRecords=resultDocs.map(resultDoc=>{
       const data=resultDoc.data();
-      const averageSeconds=Number(data.clickAverageReactionMs||0)/1000;
+      const averageSeconds=getClickAverageSeconds(data);
       return `<div class="clickRecord">
         <b>${esc(data.studentName||("學生 "+(data.studentCode||"")))}</b>｜${resultStatusText(data.status)}｜答對 ${Number(data.clickCorrectCount||0)} 次｜答錯 ${Number(data.clickWrongCount||0)} 次｜逾時 ${Number(data.clickMissCount||0)} 次｜平均 ${averageSeconds?averageSeconds.toFixed(2):"—"} 秒
       </div>`;
@@ -999,7 +1006,7 @@ window.exportTaskCSV=async taskId=>{
         resultStatusText(data.status),Number(data.attempts||0),
         csvErrorRange(data,1,2),csvErrorRange(data,3,4),csvErrorRange(data,5,Infinity),incorrect,
         data.gameRank?`第 ${data.gameRank} 名`:"",Number(data.clickCorrectCount||0),Number(data.clickWrongCount||0),Number(data.clickMissCount||0),
-        Number(data.clickAverageReactionMs||0)?(Number(data.clickAverageReactionMs)/1000).toFixed(2):"",timestampText(data.startedAt),timestampText(data.completedAt)
+        getClickAverageSeconds(data)?getClickAverageSeconds(data).toFixed(2):"",timestampText(data.startedAt),timestampText(data.completedAt)
       ].map(csvValue).join(",");
     });
     const csv="\uFEFF"+[header.map(csvValue).join(","),...rows].join("\r\n");
