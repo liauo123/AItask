@@ -554,7 +554,20 @@ function syncRecognitionEngineUI(){
   $("loadModelBtn").textContent=isOcr?"載入文字辨識":"載入模型";
   status("modelStatus",isOcr?"請輸入要辨識的文字，一行一項。":"尚未載入模型。");
 }
+function refreshTeacherControlsAfterRecognitionLoad(){
+  updateLabelsFromDOM();
+  updateClickRangeLabels();
+  updateHanziRepeatLabel();
+  updateSpeakingRepeatLabel();
+  document.querySelectorAll("#classes .classBox").forEach(updateThumbnailUI);
+  if($("gameSkipPhotoRecognition").checked)$("gameSpeechRecognition").checked=true;
+}
+function waitForTeacherInterfacePaint(){
+  return new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+}
 $("loadModelBtn").onclick=async()=>{
+  const loadButton=$("loadModelBtn");
+  if(loadButton.disabled)return;
   $("teachMode").classList.add("hidden");
   $("createTaskCard").classList.add("hidden");
   $("advancedModeCard").classList.add("hidden");
@@ -567,6 +580,7 @@ $("loadModelBtn").onclick=async()=>{
   modelURL=engine==="ocr"?"":$("modelURL").value.trim();
   if(engine==="teachable-machine"&&!modelURL)return status("modelStatus","請輸入模型網址。","err");
   if(engine==="teachable-machine"&&!modelURL.endsWith("/"))modelURL+="/";
+  loadButton.disabled=true;
   status("modelStatus",engine==="ocr"?"正在建立文字項目…":"正在載入模型…");
   try{
     if(engine==="ocr"){
@@ -596,12 +610,17 @@ $("loadModelBtn").onclick=async()=>{
     $("hanziModeCard").classList.remove("hidden");
     $("speakingModeCard").classList.remove("hidden");
     $("readingModeCard").classList.remove("hidden");
+    refreshTeacherControlsAfterRecognitionLoad();
+    await waitForTeacherInterfacePaint();
+    refreshTeacherControlsAfterRecognitionLoad();
     status("modelStatus",engine==="ocr"
       ? "文字辨識已載入，共 "+labels.length+" 項文字。可拖拉調整順序並選擇性加入縮圖。"
       : "模型載入成功，共 "+labels.length+" 類。可拖拉或點擊加入縮圖。","ok");
     saveTeacherDraft();
   }catch(e){
     status("modelStatus","模型載入失敗：\n"+e.message,"err");
+  }finally{
+    loadButton.disabled=false;
   }
 };
 

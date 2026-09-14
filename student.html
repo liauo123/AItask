@@ -1588,26 +1588,11 @@ function getCurrentQuestionSpeechConfig(){
 }
 
 function primeSafariFirstQuestionSpeech(){
-  if(!isSafariBrowser()||!task||isAutomaticPromptSpeechDisabled())return false;
-  const savedIndex=currentIndex;
-  if(currentIndex>=task.targetClasses.length)currentIndex=0;
-  const config=getCurrentQuestionSpeechConfig();
-  currentIndex=savedIndex;
-  if(!config)return false;
-  platformSpeechUnlocked=true;
-  platformSpeechLastText="";
-  platformSpeechLastAt=0;
-  platformSpeechLastPromise=null;
+  if(!isSafariBrowser())return false;
+  // Safari 需在使用者手勢中先解鎖語音，但不可在任務畫面出現前播放真正題目。
+  unlockPlatformSpeech();
   safariPrimedSpeechText="";
   safariPrimedSpeechPromise=null;
-  refreshPlatformSpeechVoice();
-  try{window.speechSynthesis.resume()}catch(e){}
-  safariPrimedSpeechText=config.text;
-  safariPrimedSpeechPromise=speakPlatformText(config.text,{
-    rate:config.rate,
-    volume:1,
-    immediate:true
-  });
   return true;
 }
 
