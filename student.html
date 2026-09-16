@@ -724,12 +724,12 @@ button,input{max-width:100%}
 
 <script>
 const firebaseConfig={
-  apiKey:"AIzaSyD4gj28DbE8b4oNj6Kz7FERvV-cW8lS7AU",
-  authDomain:"aitask-2221a.firebaseapp.com",
-  projectId:"aitask-2221a",
-  storageBucket:"aitask-2221a.firebasestorage.app",
-  messagingSenderId:"549197716669",
-  appId:"1:549197716669:web:a2f252e6c70ecc60a5abd4"
+  apiKey:"AIzaSyBbpIezLbQd2-e-3Z4pSdBLIFc_UlTPUy8",
+  authDomain:"project-6540500202923576846.firebaseapp.com",
+  projectId:"project-6540500202923576846",
+  storageBucket:"project-6540500202923576846.firebasestorage.app",
+  messagingSenderId:"516602165604",
+  appId:"1:516602165604:web:b60f69ee56a4d49c416271"
 };
 firebase.initializeApp(firebaseConfig);
 const auth=firebase.auth();
@@ -789,27 +789,39 @@ function loadRuntimeScript(url,globalName,label){
 }
 
 let buttonSoundContext=null;
-function playButtonPressSound(){
+function playWithSharedInterfaceSound(play,label){
   try{
     const AudioContextClass=window.AudioContext||window.webkitAudioContext;
     if(!AudioContextClass)return;
     if(!buttonSoundContext||buttonSoundContext.state==="closed")buttonSoundContext=new AudioContextClass();
-    const play=()=>{
-      const now=buttonSoundContext.currentTime;
-      const oscillator=buttonSoundContext.createOscillator();
-      const gain=buttonSoundContext.createGain();
+    const start=()=>{
+      if(!buttonSoundContext||buttonSoundContext.state==="closed")return;
+      try{play(buttonSoundContext)}catch(error){console.warn(label+"播放失敗",error)}
+    };
+    if(buttonSoundContext.state==="suspended"||buttonSoundContext.state==="interrupted"){
+      buttonSoundContext.resume().then(start).catch(error=>console.warn(label+"啟用失敗",error));
+    }else{
+      start();
+    }
+  }catch(error){
+    console.warn(label+"播放失敗",error);
+  }
+}
+
+function playButtonPressSound(){
+  playWithSharedInterfaceSound(ctx=>{
+      const now=ctx.currentTime;
+      const oscillator=ctx.createOscillator();
+      const gain=ctx.createGain();
       oscillator.type="sine";
       oscillator.frequency.setValueAtTime(620,now);
       oscillator.frequency.exponentialRampToValueAtTime(820,now+0.07);
       gain.gain.setValueAtTime(0.0001,now);
-      gain.gain.exponentialRampToValueAtTime(0.16,now+0.008);
+      gain.gain.exponentialRampToValueAtTime(0.4,now+0.008);
       gain.gain.exponentialRampToValueAtTime(0.0001,now+0.085);
-      oscillator.connect(gain);gain.connect(buttonSoundContext.destination);
+      oscillator.connect(gain);gain.connect(ctx.destination);
       oscillator.start(now);oscillator.stop(now+0.09);
-    };
-    if(buttonSoundContext.state==="suspended")buttonSoundContext.resume().then(play).catch(()=>{});
-    else play();
-  }catch(e){console.warn("按鈕音效播放失敗",e)}
+  },"按鈕音效");
 }
 function getEnabledButton(target){
   const button=target&&target.closest?target.closest("button"):null;
@@ -983,7 +995,7 @@ function stopPlatformSpeech(){
 function speakPlatformText(text,{lang="zh-TW",rate=.9,pitch=1,volume=1,immediate=false}={}){
   const value=String(text||"").trim();
   if(!value||!("speechSynthesis" in window))return Promise.resolve(false);
-  const playbackRate=task?.slowSpeechPlayback ? .4 : rate;
+  const playbackRate=task?.slowSpeechPlayback ? .6 : rate;
   const now=Date.now();
   if(value===platformSpeechLastText&&now-platformSpeechLastAt<2200&&platformSpeechLastPromise){
     return platformSpeechLastPromise;
@@ -1293,18 +1305,13 @@ function showCaptureFeedback(type,text,durationMs=null){
 
 function playTaskSuccessSound(){
   if(isTeachingMode())return;
-
-  try{
-    const AudioContextClass=window.AudioContext||window.webkitAudioContext;
-    if(!AudioContextClass)return;
-
-    const ctx=new AudioContextClass();
+  playWithSharedInterfaceSound(ctx=>{
     const now=ctx.currentTime;
     const gain=ctx.createGain();
     gain.connect(ctx.destination);
 
     gain.gain.setValueAtTime(0.0001,now);
-    gain.gain.exponentialRampToValueAtTime(0.28,now+0.02);
+    gain.gain.exponentialRampToValueAtTime(0.4,now+0.02);
     gain.gain.exponentialRampToValueAtTime(0.0001,now+0.7);
 
     const first=ctx.createOscillator();
@@ -1327,29 +1334,18 @@ function playTaskSuccessSound(){
     third.connect(gain);
     third.start(now+0.42);
     third.stop(now+0.7);
-
-    setTimeout(()=>{
-      try{ctx.close()}catch(e){}
-    },850);
-  }catch(e){
-    console.warn("成功音效播放失敗",e);
-  }
+  },"成功音效");
 }
 
 function playTaskErrorSound(){
   if(isTeachingMode())return;
-
-  try{
-    const AudioContextClass=window.AudioContext||window.webkitAudioContext;
-    if(!AudioContextClass)return;
-
-    const ctx=new AudioContextClass();
+  playWithSharedInterfaceSound(ctx=>{
     const now=ctx.currentTime;
     const gain=ctx.createGain();
     gain.connect(ctx.destination);
 
     gain.gain.setValueAtTime(0.0001,now);
-    gain.gain.exponentialRampToValueAtTime(0.11,now+0.025);
+    gain.gain.exponentialRampToValueAtTime(0.4,now+0.025);
     gain.gain.exponentialRampToValueAtTime(0.0001,now+0.5);
 
     const first=ctx.createOscillator();
@@ -1366,13 +1362,7 @@ function playTaskErrorSound(){
     second.connect(gain);
     second.start(now+0.24);
     second.stop(now+0.5);
-
-    setTimeout(()=>{
-      try{ctx.close()}catch(e){}
-    },650);
-  }catch(e){
-    console.warn("錯誤音效播放失敗",e);
-  }
+  },"錯誤音效");
 }
 function norm(url){url=(url||"").trim();return url.endsWith("/")?url:url+"/"}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
@@ -1793,6 +1783,32 @@ function scheduleQuestionAutoSpeech(callback,delay){
       scheduleQuestionReminder(true);
     }
   },delay);
+}
+
+function waitForStudentTaskScreenPaint(){
+  return new Promise(resolve=>{
+    let settled=false;
+    const finish=()=>{
+      if(settled)return;
+      settled=true;
+      clearTimeout(fallbackTimer);
+      resolve();
+    };
+    const fallbackTimer=setTimeout(finish,300);
+    requestAnimationFrame(()=>requestAnimationFrame(finish));
+  });
+}
+
+function scheduleFirstPhotoOrGamePromptLikeSpeakingMode(){
+  if(!task||currentIndex>=task.targetClasses.length)return;
+  prepareCurrentQuestionPrompt(false);
+  scheduleQuestionAutoSpeech(async()=>{
+    if(isAdvancedMode()||isDescriptionPromptMode()){
+      await speakAdvancedPrompt(true);
+    }else{
+      await speakEvaluationTarget(true);
+    }
+  },300);
 }
 
 function scheduleQuestionReminder(resetForQuestion=false){
@@ -3115,7 +3131,9 @@ async function startTask(){
       }
 
       renderTask();
-      prepareCurrentQuestionPrompt(true);
+      if(!((isEvaluationMode()&&!isReadingMode())||isGameMode())){
+        prepareCurrentQuestionPrompt(true);
+      }
     }
 
     $("loadCard").classList.add("hidden");
@@ -3123,7 +3141,20 @@ async function startTask(){
     $("gameWaitingCard").classList.add("hidden");
     $("taskCard").classList.remove("hidden");
 
-    await startSelectedProject();
+    const shouldScheduleFirstPhotoOrGamePrompt=(isEvaluationMode()&&!isReadingMode())||isGameMode();
+    let selectedProjectStarted=false;
+    if(shouldScheduleFirstPhotoOrGamePrompt){
+      await waitForStudentTaskScreenPaint();
+      if(projectType==="image"&&!isSpeechOnlyRecognition()){
+        await startSelectedProject();
+        selectedProjectStarted=true;
+        scheduleFirstPhotoOrGamePromptLikeSpeakingMode();
+      }else{
+        scheduleFirstPhotoOrGamePromptLikeSpeakingMode();
+      }
+    }
+
+    if(!selectedProjectStarted)await startSelectedProject();
   }catch(error){
     console.error(error);
     if(isGameMode()){
@@ -4286,6 +4317,85 @@ function normalizeSpeechText(text){
     .replace(/[^\p{L}\p{N}]/gu,"");
 }
 
+const CHINESE_SPEECH_DIGITS={
+  零:0,"〇":0,"○":0,"Ｏ":0,一:1,壹:1,二:2,貳:2,贰:2,兩:2,两:2,
+  三:3,參:3,叁:3,四:4,肆:4,五:5,伍:5,六:6,陸:6,陆:6,
+  七:7,柒:7,八:8,捌:8,九:9,玖:9
+};
+const CHINESE_SPEECH_SMALL_UNITS={十:10,拾:10,百:100,佰:100,千:1000,仟:1000};
+const CHINESE_SPEECH_LARGE_UNITS={萬:10000,万:10000,億:100000000,亿:100000000};
+
+function chineseSpeechNumeralToArabic(value){
+  const source=String(value||"");
+  if(!source)return "";
+  const hasUnit=[...source].some(char=>CHINESE_SPEECH_SMALL_UNITS[char]||CHINESE_SPEECH_LARGE_UNITS[char]);
+  if(!hasUnit){
+    return [...source].map(char=>CHINESE_SPEECH_DIGITS[char]).join("");
+  }
+  let total=0,section=0,currentDigit=0;
+  for(const char of source){
+    if(Object.prototype.hasOwnProperty.call(CHINESE_SPEECH_DIGITS,char)){
+      currentDigit=CHINESE_SPEECH_DIGITS[char];
+      continue;
+    }
+    const smallUnit=CHINESE_SPEECH_SMALL_UNITS[char];
+    if(smallUnit){
+      section+=(currentDigit||1)*smallUnit;
+      currentDigit=0;
+      continue;
+    }
+    const largeUnit=CHINESE_SPEECH_LARGE_UNITS[char];
+    if(largeUnit){
+      section+=currentDigit;
+      total+=(section||1)*largeUnit;
+      section=0;
+      currentDigit=0;
+    }
+  }
+  return String(total+section+currentDigit);
+}
+
+function normalizeSpeechComparisonText(text){
+  const convertedNumbers=String(text||"").normalize("NFKC").replace(
+    /[零〇○Ｏ一壹二貳贰兩两三參叁四肆五伍六陸陆七柒八捌九玖十拾百佰千仟萬万億亿]+/g,
+    chineseSpeechNumeralToArabic
+  );
+  const convertedCurrency=convertedNumbers.replace(
+    /(?:NT|TWD|US|HK)?\s*\$\s*(\d+)(?:\s*元)?(?![\d.])/gi,
+    "$1元"
+  );
+  return normalizeSpeechText(convertedCurrency);
+}
+
+function speechTextSafelyContainsTarget(source,target){
+  let fromIndex=0;
+  while(fromIndex<=source.length-target.length){
+    const foundIndex=source.indexOf(target,fromIndex);
+    if(foundIndex<0)return false;
+    const before=source[foundIndex-1]||"";
+    const after=source[foundIndex+target.length]||"";
+    const numberBoundaryIsSafe=
+      !(/^\d/.test(target)&&/\d/.test(before))&&
+      !(/\d$/.test(target)&&/\d/.test(after));
+    if(numberBoundaryIsSafe)return true;
+    fromIndex=foundIndex+1;
+  }
+  return false;
+}
+
+function speechNumbersMatch(spokenText,targetText){
+  const targetNumbers=targetText.match(/\d+/g)||[];
+  if(!targetNumbers.length)return true;
+  const spokenNumbers=spokenText.match(/\d+/g)||[];
+  return containsTokenSequence(spokenNumbers,targetNumbers);
+}
+
+function speechNumberRecognitionAliasMatches(spoken,targetText){
+  if(targetText!=="40")return false;
+  const heard=normalizeSpeechText(spoken);
+  return heard==="事實"||heard==="事实";
+}
+
 function isEnglishSpeechTarget(text){
   const value=String(text||"").normalize("NFKC");
   return /[A-Za-z]/.test(value)&&!/\p{Script=Han}/u.test(value);
@@ -4423,6 +4533,18 @@ function getApproximateEnglishConsonantTokens(text){
 function getApproximateEnglishVowelTokens(text){
   const words=String(text||"").normalize("NFKC").toLowerCase().match(/[a-z]+(?:'[a-z]+)?/g)||[];
   return words.map(approximateEnglishVowelKey).filter(Boolean);
+}
+
+function mediumEnglishSoundKey(word){
+  const consonantKey=approximateEnglishConsonantKey(word);
+  const vowelKey=englishVowelSoundKey(word);
+  if(!consonantKey||!vowelKey)return "";
+  return `${consonantKey}:${vowelKey}`;
+}
+
+function getMediumEnglishSoundTokens(text){
+  const words=String(text||"").normalize("NFKC").toLowerCase().match(/[a-z]+(?:'[a-z]+)?/g)||[];
+  return words.map(mediumEnglishSoundKey).filter(Boolean);
 }
 
 function normalizeMandarinSpeechToken(token){
@@ -4943,55 +5065,61 @@ function fuzzySpeechMatchesTarget(spoken,target){
 }
 
 function speechMatchesTarget(spoken,target){
-  const spokenText=normalizeSpeechText(spoken);
-  const targetText=normalizeSpeechText(target);
+  const spokenText=normalizeSpeechComparisonText(spoken);
+  const targetText=normalizeSpeechComparisonText(target);
   if(!spokenText||!targetText)return false;
-  if(spokenText===targetText||spokenText.includes(targetText))return true;
-  if(fuzzySpeechMatchesTarget(spoken,target))return true;
+  if(spokenText===targetText||speechTextSafelyContainsTarget(spokenText,targetText))return true;
+  if(speechNumberRecognitionAliasMatches(spoken,targetText))return true;
+  if(!speechNumbersMatch(spokenText,targetText))return false;
+  if(fuzzySpeechMatchesTarget(spokenText,targetText))return true;
   if(isEnglishSpeechTarget(target)){
-    const spokenPhonetics=getEnglishPhoneticTokens(spoken);
-    const targetPhonetics=getEnglishPhoneticTokens(target);
-    if(containsTokenSequence(spokenPhonetics,targetPhonetics))return true;
+    const spokenPhonetics=getEnglishPhoneticTokens(spokenText);
+    const targetPhonetics=getEnglishPhoneticTokens(targetText);
+    if(containsTokenSequence(
+      getMediumEnglishSoundTokens(spokenText),
+      getMediumEnglishSoundTokens(targetText)
+    ))return true;
     if(!task?.relaxedSpeechRecognition)return false;
+    if(containsTokenSequence(spokenPhonetics,targetPhonetics))return true;
     if(containsTokenSequence(
-      getApproximateEnglishConsonantTokens(spoken),
-      getApproximateEnglishConsonantTokens(target)
+      getApproximateEnglishConsonantTokens(spokenText),
+      getApproximateEnglishConsonantTokens(targetText)
     ))return true;
     if(containsTokenSequence(
-      getApproximateEnglishVowelTokens(spoken),
-      getApproximateEnglishVowelTokens(target)
+      getApproximateEnglishVowelTokens(spokenText),
+      getApproximateEnglishVowelTokens(targetText)
     ))return true;
     if(containsTokenSequence(
-      getRelaxedEnglishConsonantTokens(spoken),
-      getRelaxedEnglishConsonantTokens(target)
+      getRelaxedEnglishConsonantTokens(spokenText),
+      getRelaxedEnglishConsonantTokens(targetText)
     ))return true;
     if(containsTokenSequence(
-      getEnglishVowelTokens(spoken),
-      getEnglishVowelTokens(target)
+      getEnglishVowelTokens(spokenText),
+      getEnglishVowelTokens(targetText)
     ))return true;
     return containsTokenSequence(
-      getApproximateEnglishSoundTokens(spoken),
-      getApproximateEnglishSoundTokens(target)
+      getApproximateEnglishSoundTokens(spokenText),
+      getApproximateEnglishSoundTokens(targetText)
     );
   }
-  const spokenPhonetics=getPhoneticTokens(spoken);
-  const targetPhonetics=getPhoneticTokens(target);
+  const spokenPhonetics=getPhoneticTokens(spokenText);
+  const targetPhonetics=getPhoneticTokens(targetText);
   if(containsTokenSequence(spokenPhonetics,targetPhonetics))return true;
   if(containsTokenSequence(
-    getStandardMandarinNearSoundTokens(spoken),
-    getStandardMandarinNearSoundTokens(target)
+    getStandardMandarinNearSoundTokens(spokenText),
+    getStandardMandarinNearSoundTokens(targetText)
   ))return true;
   if(!task?.relaxedSpeechRecognition)return false;
-  const spokenMediumSyllables=getMediumMandarinSyllables(spoken);
-  const targetMediumSyllables=getMediumMandarinSyllables(target);
+  const spokenMediumSyllables=getMediumMandarinSyllables(spokenText);
+  const targetMediumSyllables=getMediumMandarinSyllables(targetText);
   if(containsMediumMandarinSequence(spokenMediumSyllables,targetMediumSyllables))return true;
   if(containsMediumMandarinSequence(spokenMediumSyllables,targetMediumSyllables,"consonant"))return true;
   if(containsMediumMandarinSequence(spokenMediumSyllables,targetMediumSyllables,"vowel"))return true;
-  if(containsTokenSequence(getMandarinConsonantTokens(spoken),getMandarinConsonantTokens(target)))return true;
-  if(containsTokenSequence(getMandarinVowelTokens(spoken),getMandarinVowelTokens(target)))return true;
+  if(containsTokenSequence(getMandarinConsonantTokens(spokenText),getMandarinConsonantTokens(targetText)))return true;
+  if(containsTokenSequence(getMandarinVowelTokens(spokenText),getMandarinVowelTokens(targetText)))return true;
   return containsTokenSequence(
-    getApproximateMandarinSoundTokens(spoken),
-    getApproximateMandarinSoundTokens(target)
+    getApproximateMandarinSoundTokens(spokenText),
+    getApproximateMandarinSoundTokens(targetText)
   );
 }
 
