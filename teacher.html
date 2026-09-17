@@ -158,8 +158,8 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none}
         <input id="modelURL" placeholder="貼上 Image Model URL">
       </div>
       <div id="ocrFields" class="hidden">
-        <textarea id="ocrKeywords" rows="6" placeholder="輸入要辨識的文字，一行一項"></textarea>
-        <div class="modelHint">文字辨識使用繁體中文印刷文字辨識；每一行可輸入一行目標文字。</div>
+        <textarea id="ocrKeywords" rows="6" placeholder="輸入要辨識的文字，一行一項&#10;例如：&#10;洗髮精&#10;沐浴乳&#10;牙膏"></textarea>
+        <div class="modelHint">文字辨識使用繁體中文與英文印刷文字辨識；請一行輸入一個目標文字。</div>
       </div>
       <button id="loadModelBtn" class="p" style="width:100%">載入模型</button>
       <div id="modelStatus" class="status">尚未載入模型。</div>
@@ -202,7 +202,7 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none}
         <input id="hanziTaskTitle" placeholder="書寫模式(寫)名稱">
         <div class="modeSettings">
           <label class="modeSetting hanziPracticeSetting"><input id="hanziPracticeMode" type="checkbox">書寫練習</label>
-          <div class="hanziPracticeDescription">中文字可逐字連結教育部筆順練習。</div>
+          <div class="hanziPracticeDescription">中文字可逐字連結教育部筆順練習，英文字母可逐字連結英文描寫練習。</div>
         </div>
         <input id="hanziSpeechRecognition" type="checkbox" class="hidden" aria-hidden="true">
         <input id="hanziRepeatCount" type="hidden" value="1">
@@ -314,15 +314,12 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none}
 </main>
 <div id="qrModal" class="modal hidden"><div class="box"><h3 id="qrTitle">任務 QR Code</h3><div id="qrCode"></div><div id="qrURL" class="url"></div><div class="row"><button id="copyBtn" class="p">複製網址</button><button id="closeBtn" class="s">關閉</button></div></div></div>
 <script>
-const firebaseConfig={apiKey:"AIzaSyBbpIezLbQd2-e-3Z4pSdBLIFc_UlTPUy8",authDomain:"project-6540500202923576846.firebaseapp.com",projectId:"project-6540500202923576846",storageBucket:"project-6540500202923576846.firebasestorage.app",messagingSenderId:"516602165604",appId:"1:516602165604:web:b60f69ee56a4d49c416271"};
+const firebaseConfig={apiKey:"AIzaSyD4gj28DbE8b4oNj6Kz7FERvV-cW8lS7AU",authDomain:"aitask-2221a.firebaseapp.com",projectId:"aitask-2221a",storageBucket:"aitask-2221a.firebasestorage.app",messagingSenderId:"549197716669",appId:"1:549197716669:web:a2f252e6c70ecc60a5abd4"};
 firebase.initializeApp(firebaseConfig);const auth=firebase.auth(),db=firebase.firestore();
 const firestorePersistenceReady=db.enablePersistence({synchronizeTabs:true}).catch(error=>{
   if(!["failed-precondition","unimplemented"].includes(error.code))console.warn("Firestore 本機快取啟用失敗：",error);
 });
 let user=null,model=null,modelURL="",labels=[],unsub=null,classThumbnails={};
-const THUMBNAIL_OUTPUT_SIZE=240;
-const THUMBNAIL_MAX_BYTES=40*1024;
-const THUMBNAILS_TOTAL_MAX_BYTES=700*1024;
 const $=id=>document.getElementById(id);const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));function status(id,msg,type=""){const e=$(id);e.textContent=msg;e.className="status "+type}
 const TEACHER_DRAFT_PREFIX="teacherInputDraftV1:";
 let restoringTeacherDraft=false,teacherDraftSaveTimer=null;
@@ -851,23 +848,10 @@ function resizeThumbnail(file){
         const side=Math.min(img.naturalWidth,img.naturalHeight);
         const sx=(img.naturalWidth-side)/2;
         const sy=(img.naturalHeight-side)/2;
-        canvas.width=THUMBNAIL_OUTPUT_SIZE;
-        canvas.height=THUMBNAIL_OUTPUT_SIZE;
-        ctx.imageSmoothingEnabled=true;
-        ctx.imageSmoothingQuality="high";
-        ctx.drawImage(img,sx,sy,side,side,0,0,THUMBNAIL_OUTPUT_SIZE,THUMBNAIL_OUTPUT_SIZE);
-        const qualities=[0.75,0.68,0.60,0.52,0.45,0.38];
-        let dataURL="";
-        for(const quality of qualities){
-          dataURL=canvas.toDataURL("image/jpeg",quality);
-          const base64=dataURL.split(",")[1]||"";
-          const bytes=Math.ceil(base64.length*3/4);
-          if(bytes<=THUMBNAIL_MAX_BYTES){
-            resolve(dataURL);
-            return;
-          }
-        }
-        reject(new Error("照片內容過於複雜，壓縮後仍超過縮圖容量限制，請更換背景較單純的照片。"));
+        canvas.width=120;
+        canvas.height=120;
+        ctx.drawImage(img,sx,sy,side,side,0,0,120,120);
+        resolve(canvas.toDataURL("image/jpeg",0.75));
       };
       img.src=reader.result;
     };
@@ -902,14 +886,7 @@ async function handleThumbnailFile(item,file){
   drop.classList.remove("is-dragover");
   prompt.textContent="正在處理照片…";
   try{
-    const label=item.dataset.label;
-    const previousThumbnail=classThumbnails[label];
-    classThumbnails[label]=await resizeThumbnail(file);
-    if(new Blob([JSON.stringify(classThumbnails)]).size>THUMBNAILS_TOTAL_MAX_BYTES){
-      if(previousThumbnail)classThumbnails[label]=previousThumbnail;
-      else delete classThumbnails[label];
-      throw new Error("目前全部縮圖容量已接近任務資料上限，請刪除部分縮圖後再上傳。");
-    }
+    classThumbnails[item.dataset.label]=await resizeThumbnail(file);
     updateThumbnailUI(item);
     scheduleTeacherDraftSave();
   }catch(e){
