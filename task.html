@@ -217,7 +217,7 @@ function pronunciationHanText(value){
 
 function isExcludedPronunciationInput(value){
   const text=String(value||"").normalize("NFKC").trim();
-  if(!text||/^[\d\s.,，。:：;；/\\+\-]+$/.test(text))return true;
+  if(!text||/\d/.test(text))return true;
   return /(?:siri|hey\s*siri|嘿\s*siri|小愛同學|google\s*(?:助理|assistant)|語音助理)/i.test(text);
 }
 
@@ -311,22 +311,15 @@ function pronunciationErrorCountMap(data){
 }
 
 function weightedPronunciationRecords(data){
-  const source=(Array.isArray(data&&data.speechInputRecords)?data.speechInputRecords:[]).map(record=>{
+  return (Array.isArray(data&&data.speechInputRecords)?data.speechInputRecords:[]).map(record=>{
     const item=record&&typeof record==="object"?record:{};
     return {target:String(item.target||"").trim(),input:String(item.input||"").trim(),correct:item.correct===true};
-  }).filter(item=>!item.correct&&pronunciationHanText(item.target)&&pronunciationHanText(item.input)&&!isExcludedPronunciationInput(item.input));
-  const grouped=new Map();
-  source.forEach(record=>{
-    if(!grouped.has(record.target))grouped.set(record.target,[]);
-    grouped.get(record.target).push(record);
-  });
-  const errorCounts=pronunciationErrorCountMap(data),weighted=[];
-  grouped.forEach((records,target)=>{
-    const total=Math.max(records.length,Math.max(0,Number(errorCounts[target])||0));
-    const base=Math.floor(total/records.length),remainder=total%records.length;
-    records.forEach((record,index)=>weighted.push({...record,weight:Math.max(1,base+(index<remainder?1:0))}));
-  });
-  return weighted;
+  }).filter(item=>!item.correct&&pronunciationHanText(item.target)&&pronunciationHanText(item.input)&&!isExcludedPronunciationInput(item.input))
+    .map(record=>({...record,weight:1}));
+}
+
+function pronunciationFinalsClose(left,right){
+  return left===right||pronunciationRelatedPart(left,right,"final");
 }
 
 function pronunciationExampleText(record){
@@ -360,9 +353,11 @@ function renderPronunciationAnalysis(data){
       if(pair.type!=="pair"||!pair.target||!pair.spoken)return;
       const matchedLabels=PRONUNCIATION_CONFUSION_RULES.filter(rule=>{
         const left=pair.target[rule.part],right=pair.spoken[rule.part];
-        return left!==right&&rule.members.has(left)&&rule.members.has(right);
+        if(left===right||!rule.members.has(left)||!rule.members.has(right))return false;
+        if(rule.part==="initial"&&!pronunciationFinalsClose(pair.target.final,pair.spoken.final))return false;
+        return true;
       }).map(rule=>rule.label);
-      if(matchedLabels.length)addResult(matchedLabels.join("、"),record.weight,record);
+      matchedLabels.forEach(label=>addResult(label,record.weight,record));
     });
     if(record.targetSyllables.length>=3){
       const deletionCount=aligned.filter(item=>item.type==="delete").length;
@@ -376,11 +371,17 @@ function renderPronunciationAnalysis(data){
       if(deletionCount||insertionCount||substitutionCount||orderChanged||partialAnswer)addResult("多音節語句",record.weight,record);
     }
   });
-  const ranked=[...stats.values()].filter(item=>item.count>=3).sort((a,b)=>b.count-a.count||a.label.localeCompare(b.label,"zh-Hant")).slice(0,3);
+  const ranked=[...stats.values()]
+    .filter(item=>item.label!=="多音節語句"&&item.count>=3)
+    .sort((a,b)=>b.count-a.count||a.label.localeCompare(b.label,"zh-Hant"))
+    .slice(0,2)
+    .map((item,index)=>({...item,rank:index+1}));
+  const multiSyllable=stats.get("多音節語句");
+  if(multiSyllable&&multiSyllable.count>=3)ranked.push({...multiSyllable,rank:3});
   if(!ranked.length){
     return `<div class="pronunciationAnalysis"><div class="pronunciationAnalysisTitle">可能的發音困難分析</div><div class="pronunciationAnalysisMessage">目前尚未發現重複達3次的發音混淆，建議繼續累積語音練習紀錄。</div>${reminder}</div>`;
   }
-  const rows=ranked.map((item,index)=>`<div class="pronunciationAnalysisRow"><span>${index+1}.</span><b>${esc(item.label)}</b><span>${item.count}次</span><span>${esc(item.examples[0]||"—")}</span></div>`).join("");
+  const rows=ranked.map(item=>`<div class="pronunciationAnalysisRow"><span>${item.rank}.</span><b>${esc(item.label)}</b><span>${item.count}次</span><span>${esc(item.examples[0]||"—")}</span></div>`).join("");
   return `<div class="pronunciationAnalysis"><div class="pronunciationAnalysisTitle">可能的發音困難分析</div><div class="pronunciationAnalysisTable"><div class="pronunciationAnalysisRow header"><span>順位</span><span>練習重點</span><span>出現次數</span><span>代表例子</span></div>${rows}</div>${reminder}</div>`;
 }
 
