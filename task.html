@@ -374,10 +374,11 @@ function renderPronunciationAnalysis(data){
   const ranked=[...stats.values()]
     .filter(item=>item.label!=="多音節語句"&&item.count>=3)
     .sort((a,b)=>b.count-a.count||a.label.localeCompare(b.label,"zh-Hant"))
-    .slice(0,2)
-    .map((item,index)=>({...item,rank:index+1}));
+    .slice(0,2);
   const multiSyllable=stats.get("多音節語句");
-  if(multiSyllable&&multiSyllable.count>=3)ranked.push({...multiSyllable,rank:3});
+  if(multiSyllable&&multiSyllable.count>=3)ranked.push(multiSyllable);
+  ranked.sort((a,b)=>b.count-a.count||a.label.localeCompare(b.label,"zh-Hant"));
+  ranked.forEach((item,index)=>item.rank=index+1);
   if(!ranked.length){
     return `<div class="pronunciationAnalysis"><div class="pronunciationAnalysisTitle">可能的發音困難分析</div><div class="pronunciationAnalysisMessage">目前尚未發現重複達3次的發音混淆，建議繼續累積語音練習紀錄。</div>${reminder}</div>`;
   }
