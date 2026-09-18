@@ -478,8 +478,7 @@ function renderPronunciationAnalysis(data){
     const details=[
       frequent?`<div class="pronunciationAnalysisDetailLine"><b>錯誤摘要：</b>${esc(frequent)}</div>`:"",
       typeSummary?`<div class="pronunciationAnalysisDetailLine"><b>錯誤類型：</b>${esc(typeSummary)}</div>`:"",
-      teaching.practice.length?`<div class="pronunciationAnalysisDetailLine"><b>建議練習：</b>${esc(teaching.practice.join("、"))}</div>`:"",
-      teaching.tips.length?`<div class="pronunciationAnalysisDetailLine"><b>教學提示：</b>${esc(teaching.tips.join(" "))}</div>`:""
+      teaching.practice.length?`<div class="pronunciationAnalysisDetailLine"><b>建議練習：</b>${esc(teaching.practice.join("、"))}</div>`:""
     ].filter(Boolean).join("");
     return `<div class="pronunciationAnalysisRow"><span>${item.rank}.</span><b>${esc(item.label)}</b><span>${esc(item.countText||`${item.count}次`)}</span><span>${esc(item.examples[0]?pronunciationExampleText(item.examples[0]):"—")}</span></div><div class="pronunciationAnalysisDetail">${details}</div>`;
   }).join("");
