@@ -65,6 +65,7 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none}
 .thumbnailSearchModal{z-index:140;padding:12px}.thumbnailSearchBox{width:min(920px,100%);max-height:92vh;overflow:auto;background:#fff;border-radius:18px;padding:18px;box-shadow:0 24px 65px rgba(15,23,42,.3);text-align:left}.thumbnailSearchHead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}.thumbnailSearchHead h3{margin:0;color:#17376b}.thumbnailSearchClose{min-width:44px;padding:8px 11px}.thumbnailSearchForm{display:flex;align-items:center;gap:8px}.thumbnailSearchForm input{margin:0}.thumbnailSearchForm button{flex:0 0 auto}.thumbnailSearchStatus{margin:10px 0;color:#52677f;font-size:13px;line-height:1.55}.thumbnailSearchGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.thumbnailSearchCard{display:flex;flex-direction:column;gap:7px;border:1px solid #dbe4ee;border-radius:12px;padding:8px;background:#f8fafc;min-width:0}.thumbnailSearchCard img{width:100%;height:135px;object-fit:contain;border-radius:8px;background:#fff;border:1px solid #e2e8f0}.thumbnailSearchName{font-size:12px;line-height:1.4;min-height:2.8em;overflow-wrap:anywhere}.thumbnailSearchActions{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:auto}.thumbnailSearchSource{font-size:12px;color:#2563eb}.thumbnailSearchUse{padding:8px 9px;font-size:12px}
 @media(max-width:760px){.thumbnailSearchGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.thumbnailSearchForm{align-items:stretch;flex-direction:column}.thumbnailSearchForm button{width:100%}}
 .thumbnailSearchBox{width:min(1100px,100%)}.thumbnailSearchGrid{grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:10px}.thumbnailSearchCard{padding:5px;border-color:transparent;background:#fff}.thumbnailSearchCard:hover{border-color:#bfdbfe;background:#f8fbff;box-shadow:0 5px 14px rgba(15,23,42,.1)}.thumbnailSearchCard img{height:150px;border:0}.thumbnailSearchName{min-height:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.thumbnailSearchActions{padding:0 3px 3px}
+.thumbnailSearchMeta{padding:0 3px;color:#64748b;font-size:11px;line-height:1.45;min-height:3.1em;overflow-wrap:anywhere}.thumbnailSearchProvider{display:inline-block;margin-right:5px;padding:1px 5px;border-radius:999px;background:#e0ecff;color:#1d4ed8;font-weight:800}
 @media(max-width:760px){.thumbnailSearchGrid{grid-template-columns:repeat(auto-fill,minmax(125px,1fr));gap:7px}.thumbnailSearchCard img{height:125px}}
 .thumbnailRemove{width:44px;min-width:44px;padding:7px 6px;font-size:12px;line-height:1.25;white-space:normal;word-break:break-all}
 .thumbnailInput{display:none}
@@ -945,11 +946,13 @@ function openThumbnailSearch(item){
     <form class="thumbnailSearchForm"><input type="search" aria-label="圖片搜尋文字"><button class="p" type="submit">搜尋圖片</button></form>
     <div class="thumbnailSearchStatus" role="status" aria-live="polite"></div>
     <div class="thumbnailSearchGrid"></div>
-    <p class="small">每張圖片皆可查看來源，是否設為平台縮圖由教師自行決定。</p>
+    <p class="small">圖片優先由 Openverse 搜尋；服務無回應、受限或無結果時，會自動改用 Wikimedia Commons。每張圖片皆可查看原始來源與授權資訊，是否設為平台縮圖由教師自行決定。</p>
+    <p class="small">版權提醒：網路圖片可能受著作權保護。請先查看圖片來源與授權條款，確認可使用並依規定標示作者及授權後，再設為教材縮圖。</p>
   </div>`;
   const input=modal.querySelector(".thumbnailSearchForm input");
   input.value=String(item.dataset.label||"").trim();
   const close=()=>{
+    modal.thumbnailSearchAbortController?.abort();
     document.removeEventListener("keydown",onKeydown);
     modal.remove();
   };
@@ -966,79 +969,199 @@ function openThumbnailSearch(item){
   searchOnlineThumbnails(item,modal);
 }
 
+function plainOnlineImageText(value){
+  const box=document.createElement("div");
+  box.innerHTML=String(value||"");
+  return String(box.textContent||box.innerText||"").replace(/\s+/g," ").trim();
+}
+
+async function fetchWithSearchTimeout(url,options={},timeoutMs=8000){
+  const controller=new AbortController();
+  const outerSignal=options.signal;
+  const abortFromOuter=()=>controller.abort();
+  if(outerSignal){
+    if(outerSignal.aborted)controller.abort();
+    else outerSignal.addEventListener("abort",abortFromOuter,{once:true});
+  }
+  const timer=setTimeout(()=>controller.abort(),timeoutMs);
+  try{
+    return await fetch(url,{...options,signal:controller.signal});
+  }finally{
+    clearTimeout(timer);
+    outerSignal?.removeEventListener?.("abort",abortFromOuter);
+  }
+}
+
+async function searchOpenverseImages(keyword,signal){
+  const params=new URLSearchParams({q:keyword,page_size:"24",mature:"false"});
+  const response=await fetchWithSearchTimeout(
+    "https://api.openverse.org/v1/images/?"+params.toString(),
+    {mode:"cors",credentials:"omit",headers:{Accept:"application/json"},signal},
+    8000
+  );
+  if(!response.ok)throw new Error("Openverse HTTP "+response.status);
+  const data=await response.json();
+  const rows=Array.isArray(data?.results)?data.results:[];
+  return rows.filter(row=>row&&row.thumbnail).slice(0,24).map(row=>{
+    const licenseName=[row.license,row.license_version].filter(Boolean).join(" ").toUpperCase();
+    return {
+      provider:"Openverse",
+      title:String(row.title||keyword||"未命名圖片"),
+      previewUrl:String(row.thumbnail||row.url||""),
+      downloadUrls:[
+        row.id?"https://api.openverse.org/v1/images/"+encodeURIComponent(row.id)+"/thumb/?compressed=true":"",
+        row.thumbnail||"",row.url||""
+      ].filter(Boolean),
+      sourceUrl:String(row.foreign_landing_url||row.detail_url||row.url||""),
+      creator:String(row.creator||"未知作者"),
+      license:licenseName||"請查看來源授權"
+    };
+  });
+}
+
+async function searchWikimediaImages(keyword,signal){
+  const params=new URLSearchParams({
+    action:"query",format:"json",formatversion:"2",origin:"*",
+    generator:"search",gsrsearch:keyword,gsrnamespace:"6",gsrlimit:"24",
+    prop:"imageinfo",iiprop:"url|mime|thumbmime|mediatype|extmetadata",iiurlwidth:"480"
+  });
+  const response=await fetchWithSearchTimeout(
+    "https://commons.wikimedia.org/w/api.php?"+params.toString(),
+    {mode:"cors",credentials:"omit",signal},
+    8000
+  );
+  if(!response.ok)throw new Error("Wikimedia Commons HTTP "+response.status);
+  const data=await response.json();
+  const pages=Array.isArray(data?.query?.pages)?data.query.pages:[];
+  return pages.map(page=>({page,info:page.imageinfo?.[0]})).filter(({info})=>{
+    const type=String(info?.thumbmime||info?.mime||"");
+    return !!(info&&(info.thumburl||info.url)&&type.startsWith("image/"));
+  }).slice(0,24).map(({page,info})=>{
+    const metadata=info.extmetadata||{};
+    return {
+      provider:"Wikimedia Commons",
+      title:String(page.title||keyword).replace(/^File:/i,""),
+      previewUrl:String(info.thumburl||info.url||""),
+      downloadUrls:[info.thumburl||"",info.url||""].filter(Boolean),
+      sourceUrl:String(info.descriptionurl||info.url||""),
+      creator:plainOnlineImageText(metadata.Artist?.value)||"未知作者",
+      license:plainOnlineImageText(metadata.LicenseShortName?.value)||"請查看來源授權"
+    };
+  });
+}
+
+async function fetchOnlineImageBlob(urls,signal){
+  let lastError;
+  for(const url of [...new Set((urls||[]).filter(Boolean))]){
+    try{
+      const response=await fetchWithSearchTimeout(url,{mode:"cors",credentials:"omit",signal},10000);
+      if(!response.ok)throw new Error("HTTP "+response.status);
+      const blob=await response.blob();
+      if(!String(blob.type||"").startsWith("image/"))throw new Error("取得的檔案不是圖片");
+      return blob;
+    }catch(error){
+      if(signal?.aborted)throw error;
+      lastError=error;
+    }
+  }
+  throw lastError||new Error("圖片下載失敗");
+}
+
+function renderOnlineThumbnailResults(item,modal,results,providerLabel){
+  const grid=modal.querySelector(".thumbnailSearchGrid");
+  const message=modal.querySelector(".thumbnailSearchStatus");
+  const keyword=String(modal.querySelector(".thumbnailSearchForm input")?.value||"").trim();
+  message.textContent="由 "+providerLabel+" 找到 "+results.length+" 張候選圖片，按「設為縮圖」即可套用。";
+  results.forEach(result=>{
+    const card=document.createElement("div");
+    card.className="thumbnailSearchCard";
+    const img=document.createElement("img");
+    img.src=result.previewUrl;
+    img.alt=result.title||keyword;
+    img.loading="lazy";
+    img.referrerPolicy="no-referrer";
+    const name=document.createElement("div");
+    name.className="thumbnailSearchName";
+    name.textContent=result.title||keyword;
+    name.title=result.title||keyword;
+    const meta=document.createElement("div");
+    meta.className="thumbnailSearchMeta";
+    const provider=document.createElement("span");
+    provider.className="thumbnailSearchProvider";
+    provider.textContent=result.provider;
+    const details=document.createElement("span");
+    details.textContent="作者："+(result.creator||"未知作者")+"｜授權："+(result.license||"請查看來源授權");
+    meta.append(provider,details);
+    const actions=document.createElement("div");
+    actions.className="thumbnailSearchActions";
+    const source=document.createElement("a");
+    source.className="thumbnailSearchSource";
+    source.href=result.sourceUrl||result.previewUrl;
+    source.target="_blank";
+    source.rel="noopener noreferrer";
+    source.textContent="查看來源";
+    const use=document.createElement("button");
+    use.className="thumbnailSearchUse p";
+    use.type="button";
+    use.textContent="設為縮圖";
+    use.addEventListener("click",async()=>{
+      use.disabled=true;
+      message.textContent="正在下載並建立平台縮圖…";
+      const label=item.dataset.label;
+      const previous=classThumbnails[label]||"";
+      try{
+        const blob=await fetchOnlineImageBlob(result.downloadUrls);
+        const file=new File([blob],"online-thumbnail",{type:blob.type});
+        await handleThumbnailFile(item,file);
+        if((classThumbnails[label]||"")===previous)throw new Error("縮圖建立失敗，請選擇其他圖片。");
+        message.textContent="平台縮圖建立完成。";
+        setTimeout(()=>modal.closeThumbnailSearch?.(),350);
+      }catch(error){
+        message.textContent="無法建立縮圖："+(error.message||error)+"。請選擇其他圖片或自行下載後上傳。";
+        use.disabled=false;
+      }
+    });
+    actions.append(source,use);
+    card.append(img,name,meta,actions);
+    grid.appendChild(card);
+  });
+}
+
 async function searchOnlineThumbnails(item,modal){
   const input=modal.querySelector(".thumbnailSearchForm input");
   const grid=modal.querySelector(".thumbnailSearchGrid");
   const message=modal.querySelector(".thumbnailSearchStatus");
+  const submit=modal.querySelector(".thumbnailSearchForm button");
   const keyword=String(input.value||"").trim();
   if(!keyword){message.textContent="請輸入要搜尋的文字。";input.focus();return}
+  modal.thumbnailSearchAbortController?.abort();
+  const controller=new AbortController();
+  modal.thumbnailSearchAbortController=controller;
   grid.innerHTML="";
-  message.textContent="正在搜尋「"+keyword+"」的圖片…";
+  submit.disabled=true;
+  message.textContent="正在使用 Openverse 搜尋「"+keyword+"」的圖片…";
   try{
-    const params=new URLSearchParams({
-      action:"query",format:"json",formatversion:"2",origin:"*",
-      generator:"search",gsrsearch:keyword,gsrnamespace:"6",gsrlimit:"24",
-      prop:"imageinfo",iiprop:"url|mime|thumbmime|mediatype",iiurlwidth:"480"
-    });
-    const response=await fetch("https://commons.wikimedia.org/w/api.php?"+params.toString(),{mode:"cors",credentials:"omit"});
-    if(!response.ok)throw new Error("搜尋服務暫時無法使用。HTTP "+response.status);
-    const data=await response.json();
-    const pages=Array.isArray(data?.query?.pages)?data.query.pages:[];
-    const results=pages.map(page=>({page,info:page.imageinfo?.[0]})).filter(({info})=>{
-      const type=String(info?.thumbmime||info?.mime||"");
-      return !!(info&&(info.thumburl||info.url)&&type.startsWith("image/"));
-    });
-    if(!results.length){message.textContent="找不到適合的圖片，請更換搜尋文字。";return}
-    message.textContent="找到 "+results.length+" 張候選圖片，按「設為縮圖」即可套用。";
-    results.forEach(({page,info})=>{
-      const card=document.createElement("div");
-      card.className="thumbnailSearchCard";
-      const img=document.createElement("img");
-      img.src=info.thumburl||info.url;
-      img.alt=String(page.title||keyword).replace(/^File:/i,"");
-      img.loading="lazy";
-      img.referrerPolicy="no-referrer";
-      const name=document.createElement("div");
-      name.className="thumbnailSearchName";
-      name.textContent=img.alt;
-      const actions=document.createElement("div");
-      actions.className="thumbnailSearchActions";
-      const source=document.createElement("a");
-      source.className="thumbnailSearchSource";
-      source.href=info.descriptionurl||info.url;
-      source.target="_blank";
-      source.rel="noopener noreferrer";
-      source.textContent="查看來源";
-      const use=document.createElement("button");
-      use.className="thumbnailSearchUse p";
-      use.type="button";
-      use.textContent="設為縮圖";
-      use.addEventListener("click",async()=>{
-        use.disabled=true;
-        message.textContent="正在下載並建立平台縮圖…";
-        const label=item.dataset.label;
-        const previous=classThumbnails[label]||"";
-        try{
-          const imageResponse=await fetch(info.thumburl||info.url,{mode:"cors",credentials:"omit"});
-          if(!imageResponse.ok)throw new Error("圖片下載失敗。HTTP "+imageResponse.status);
-          const blob=await imageResponse.blob();
-          if(!String(blob.type||"").startsWith("image/"))throw new Error("取得的檔案不是圖片。" );
-          const file=new File([blob],"online-thumbnail",{type:blob.type});
-          await handleThumbnailFile(item,file);
-          if((classThumbnails[label]||"")===previous)throw new Error("縮圖建立失敗，請選擇其他圖片。" );
-          message.textContent="平台縮圖建立完成。";
-          setTimeout(()=>modal.closeThumbnailSearch?.(),350);
-        }catch(error){
-          message.textContent="無法建立縮圖："+(error.message||error);
-          use.disabled=false;
-        }
-      });
-      actions.append(source,use);
-      card.append(img,name,actions);
-      grid.appendChild(card);
-    });
+    let results=[];
+    let providerLabel="Openverse";
+    try{
+      results=await searchOpenverseImages(keyword,controller.signal);
+      if(!results.length)throw new Error("Openverse 沒有合適結果");
+    }catch(openverseError){
+      if(controller.signal.aborted)return;
+      message.textContent="Openverse 暫時無法提供結果，正在自動改用 Wikimedia Commons…";
+      providerLabel="Wikimedia Commons（備援）";
+      results=await searchWikimediaImages(keyword,controller.signal);
+    }
+    if(controller.signal.aborted)return;
+    if(!results.length){message.textContent="Openverse 與 Wikimedia Commons 都找不到適合的圖片，請更換搜尋文字。";return}
+    renderOnlineThumbnailResults(item,modal,results,providerLabel);
   }catch(error){
-    message.textContent="網路圖片搜尋失敗："+(error.message||error);
+    if(!controller.signal.aborted)message.textContent="網路圖片搜尋失敗："+(error.message||error);
+  }finally{
+    if(modal.thumbnailSearchAbortController===controller){
+      modal.thumbnailSearchAbortController=null;
+      submit.disabled=false;
+    }
   }
 }
 
