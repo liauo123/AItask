@@ -64,6 +64,8 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none}
 .thumbnailSearch:hover,.thumbnailSearch:focus-visible{background:#dbeafe;border-color:#60a5fa;box-shadow:0 4px 11px rgba(37,99,235,.2)}
 .thumbnailSearchModal{z-index:140;padding:12px}.thumbnailSearchBox{width:min(920px,100%);max-height:92vh;overflow:auto;background:#fff;border-radius:18px;padding:18px;box-shadow:0 24px 65px rgba(15,23,42,.3);text-align:left}.thumbnailSearchHead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}.thumbnailSearchHead h3{margin:0;color:#17376b}.thumbnailSearchClose{min-width:44px;padding:8px 11px}.thumbnailSearchForm{display:flex;align-items:center;gap:8px}.thumbnailSearchForm input{margin:0}.thumbnailSearchForm button{flex:0 0 auto}.thumbnailSearchStatus{margin:10px 0;color:#52677f;font-size:13px;line-height:1.55}.thumbnailSearchGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.thumbnailSearchCard{display:flex;flex-direction:column;gap:7px;border:1px solid #dbe4ee;border-radius:12px;padding:8px;background:#f8fafc;min-width:0}.thumbnailSearchCard img{width:100%;height:135px;object-fit:contain;border-radius:8px;background:#fff;border:1px solid #e2e8f0}.thumbnailSearchName{font-size:12px;line-height:1.4;min-height:2.8em;overflow-wrap:anywhere}.thumbnailSearchActions{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:auto}.thumbnailSearchSource{font-size:12px;color:#2563eb}.thumbnailSearchUse{padding:8px 9px;font-size:12px}
 @media(max-width:760px){.thumbnailSearchGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.thumbnailSearchForm{align-items:stretch;flex-direction:column}.thumbnailSearchForm button{width:100%}}
+.thumbnailSearchBox{width:min(1100px,100%)}.thumbnailSearchGrid{grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:10px}.thumbnailSearchCard{padding:5px;border-color:transparent;background:#fff}.thumbnailSearchCard:hover{border-color:#bfdbfe;background:#f8fbff;box-shadow:0 5px 14px rgba(15,23,42,.1)}.thumbnailSearchCard img{height:150px;border:0}.thumbnailSearchName{min-height:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.thumbnailSearchActions{padding:0 3px 3px}
+@media(max-width:760px){.thumbnailSearchGrid{grid-template-columns:repeat(auto-fill,minmax(125px,1fr));gap:7px}.thumbnailSearchCard img{height:125px}}
 .thumbnailRemove{width:44px;min-width:44px;padding:7px 6px;font-size:12px;line-height:1.25;white-space:normal;word-break:break-all}
 .thumbnailInput{display:none}
 .audioOptions{display:none}
@@ -943,7 +945,7 @@ function openThumbnailSearch(item){
     <form class="thumbnailSearchForm"><input type="search" aria-label="圖片搜尋文字"><button class="p" type="submit">搜尋圖片</button></form>
     <div class="thumbnailSearchStatus" role="status" aria-live="polite"></div>
     <div class="thumbnailSearchGrid"></div>
-    <p class="small">圖片來源：Wikimedia Commons。選用前請確認圖片內容及來源頁面的授權資訊。</p>
+    <p class="small">每張圖片皆可查看來源，是否設為平台縮圖由教師自行決定。</p>
   </div>`;
   const input=modal.querySelector(".thumbnailSearchForm input");
   input.value=String(item.dataset.label||"").trim();
@@ -975,7 +977,7 @@ async function searchOnlineThumbnails(item,modal){
   try{
     const params=new URLSearchParams({
       action:"query",format:"json",formatversion:"2",origin:"*",
-      generator:"search",gsrsearch:keyword,gsrnamespace:"6",gsrlimit:"12",
+      generator:"search",gsrsearch:keyword,gsrnamespace:"6",gsrlimit:"24",
       prop:"imageinfo",iiprop:"url|mime|thumbmime|mediatype",iiurlwidth:"480"
     });
     const response=await fetch("https://commons.wikimedia.org/w/api.php?"+params.toString(),{mode:"cors",credentials:"omit"});
