@@ -3092,9 +3092,15 @@ function recognizeHanziSpeech({automatic=false,resumeSession=false,continuedSpee
       "audio-capture":"找不到可用的麥克風，請確認麥克風已連接，並在系統音效設定中選為輸入裝置。",
       "network":"語音辨識服務連線失敗，請確認網路後再試一次。"
     }[error]||`語音辨識失敗：${error}`;
-    const recoverable=!['not-allowed','service-not-allowed','audio-capture'].includes(event.error);
+    const recoverable=!['not-allowed','service-not-allowed','audio-capture','network'].includes(event.error);
     if(event.error==="network"){
-      resumeRecognition("語音辨識服務暫時中斷，正在重新連線…");
+      stopHanziSpeechRecognition(recognition,true);
+      if(automatic){
+        automaticSpeechFallbackToButton=true;
+        clearAutomaticSpeechRestartTimer();
+        clearAutomaticSpeechIdleTimer(false);
+      }
+      setStatus("hanziStatus","語音辨識服務連線失敗，請確認網路後按麥克風重新辨識。","error");
       return;
     }
     if(recoverable){
@@ -5585,9 +5591,17 @@ async function startOptionalAudioRecognition({automatic=false,resumeSession=fals
       "network":"語音辨識服務連線失敗，請確認網路。",
       "no-speech":"沒有聽到語音，請靠近麥克風再試一次。"
     }[event.error]||"語音辨識失敗，請重新嘗試。";
-    const recoverable=!['not-allowed','service-not-allowed','audio-capture'].includes(event.error);
+    const recoverable=!['not-allowed','service-not-allowed','audio-capture','network'].includes(event.error);
     if(event.error==="network"){
-      resumeRecognition("語音辨識服務暫時中斷，正在重新連線…");
+      settled=true;
+      stopOptionalAudioRecognition(false);
+      if(automatic){
+        automaticSpeechFallbackToButton=true;
+        clearAutomaticSpeechRestartTimer();
+        clearAutomaticSpeechIdleTimer(false);
+      }
+      setVoiceResult("語音辨識服務連線失敗，請確認網路後按麥克風重新辨識。","error");
+      updateVerificationUI();
       return;
     }
     if(recoverable&&(!lastHeard||(!lastResultWasFinal&&optionalAudioSessionDeadline<0))){
