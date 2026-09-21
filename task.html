@@ -569,6 +569,7 @@ function syncActiveResultListeners(){
     if(resultUnsubsByTask.has(taskId)||!validTaskIds.has(taskId))return;
     resultDocsByTask.set(taskId,[]);resultErrorsByTask.delete(taskId);
     const stop=db.collection("taskResults")
+      .where("teacherId","==",user.uid)
       .where("taskId","==",taskId)
       .orderBy("updatedAt","desc")
       .limit(RESULT_LIMIT)
