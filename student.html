@@ -785,9 +785,9 @@ const firebaseConfig={
   messagingSenderId:"549197716669",
   appId:"1:549197716669:web:a2f252e6c70ecc60a5abd4"
 };
-const studentFirebaseApp=firebase.initializeApp(firebaseConfig,"studentApp");
-const auth=studentFirebaseApp.auth();
-const db=studentFirebaseApp.firestore();
+firebase.initializeApp(firebaseConfig);
+const auth=firebase.auth();
+const db=firebase.firestore();
 const firestorePersistenceReady=db.enablePersistence({synchronizeTabs:true}).catch(error=>{
   if(!["failed-precondition","unimplemented"].includes(error.code)){
     console.warn("Firestore 本機快取啟用失敗：",error);
@@ -925,7 +925,7 @@ let consecutiveWrongAttempts=0;
 let totalErrorCount=0;
 let itemErrorCounts={};
 let imageItemErrorCounts={},audioItemErrorCounts={};
-let exitInProgress=false,exitMicrophoneShutdownPromise=null,backgroundMicrophoneShutdownPromise=Promise.resolve();
+let exitInProgress=false,exitMicrophoneShutdownPromise=null;
 let studentLeaveConfirmed=false;
 let studentPageMarkedLeft=false,studentPresenceWritePromise=Promise.resolve();
 let queuedResultRef=null,queuedResultPatch=null,queuedResultTimer=null,queuedResultWaiters=[],studentResultWritePromise=Promise.resolve();
@@ -3093,16 +3093,6 @@ function recognizeHanziSpeech({automatic=false,resumeSession=false,continuedSpee
       "network":"語音辨識服務連線失敗，請確認網路後再試一次。"
     }[error]||`語音辨識失敗：${error}`;
     const recoverable=!['not-allowed','service-not-allowed','audio-capture','network'].includes(event.error);
-    if(event.error==="network"){
-      stopHanziSpeechRecognition(recognition,true);
-      if(automatic){
-        automaticSpeechFallbackToButton=true;
-        clearAutomaticSpeechRestartTimer();
-        clearAutomaticSpeechIdleTimer(false);
-      }
-      setStatus("hanziStatus","語音辨識服務連線失敗，請確認網路後按麥克風重新辨識。","error");
-      return;
-    }
     if(recoverable){
       resumeRecognition("正在聆聽，請念出畫面上的字…");
       return;
@@ -5592,18 +5582,6 @@ async function startOptionalAudioRecognition({automatic=false,resumeSession=fals
       "no-speech":"沒有聽到語音，請靠近麥克風再試一次。"
     }[event.error]||"語音辨識失敗，請重新嘗試。";
     const recoverable=!['not-allowed','service-not-allowed','audio-capture','network'].includes(event.error);
-    if(event.error==="network"){
-      settled=true;
-      stopOptionalAudioRecognition(false);
-      if(automatic){
-        automaticSpeechFallbackToButton=true;
-        clearAutomaticSpeechRestartTimer();
-        clearAutomaticSpeechIdleTimer(false);
-      }
-      setVoiceResult("語音辨識服務連線失敗，請確認網路後按麥克風重新辨識。","error");
-      updateVerificationUI();
-      return;
-    }
     if(recoverable&&(!lastHeard||(!lastResultWasFinal&&optionalAudioSessionDeadline<0))){
       resumeRecognition(lastHeard?"正在接續語音辨識，請繼續回答…":"正在聆聽");
       return;
@@ -5745,18 +5723,11 @@ function detachAudioRecognizerStream(recognizer){
   try{extractor.stream=null}catch(e){}
 }
 
-async function releaseStudentMicrophoneForBackground(){
-  const recognitions=[...new Set([
-    ...trackedSpeechRecognitions,
-    browserSpeechRecognition,
-    hanziSpeechRecognition
-  ].filter(Boolean))];
+function releaseStudentMicrophoneForBackground(){
   const recognizer=activeAudioRecognizer||(projectType==="audio"?model:null);
-  const speechShutdowns=recognitions.map(waitForSpeechRecognitionShutdown);
   pauseStudentMicrophone();
   detachAudioRecognizerStream(recognizer);
   stopTrackedMicrophoneTracks();
-  await Promise.all(speechShutdowns);
 }
 
 async function shutdownStudentMicrophoneForExit(){
@@ -6344,12 +6315,7 @@ function stopAll(preserveClickRound=false){
 function pauseStudentPageForBackground(){
   const shouldPausePage=!pageAutoPaused&&!finished&&!!task&&!paused;
   if(shouldPausePage)pageAutoPaused=true;
-  const previousShutdown=backgroundMicrophoneShutdownPromise;
-  const currentShutdown=releaseStudentMicrophoneForBackground();
-  backgroundMicrophoneShutdownPromise=Promise.all([previousShutdown,currentShutdown]).catch(()=>{
-    stopTrackedSpeechRecognitions(true);
-    stopTrackedMicrophoneTracks();
-  });
+  releaseStudentMicrophoneForBackground();
   markStudentPageAsLeft();
   if(!shouldPausePage)return;
   stopAll(isClickMode());
@@ -6360,9 +6326,6 @@ function pauseStudentPageForBackground(){
 }
 
 async function resumeStudentPageFromBackground(){
-  if(document.hidden||!pageAutoPaused||finished||!task||paused)return;
-  try{await backgroundMicrophoneShutdownPromise}catch(e){}
-  backgroundMicrophoneShutdownPromise=Promise.resolve();
   if(document.hidden||!pageAutoPaused||finished||!task||paused)return;
   pageAutoPaused=false;
   try{
