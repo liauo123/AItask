@@ -144,10 +144,11 @@ const firestorePersistenceReady=db.enablePersistence({synchronizeTabs:true}).cat
   }
 });
 let user=null,unsub=null,activeMode="click",renderGeneration=0;
-let latestTaskDocs=[],resultRefreshTimer=null,resultListenerReady=false,tasksListenerReady=false;
-let resultDocsByTask=new Map(),resultCacheError="";
-let resultListenerGeneration=0,resultListenerTaskKey="";
-const resultUnsubs=[],playerUnsubs=new Map(),gamePlayersCache=new Map();
+let latestTaskDocs=[],resultRefreshTimer=null,tasksListenerReady=false;
+let resultDocsByTask=new Map(),resultErrorsByTask=new Map();
+const expandedResultTaskIds=new Set(),resultUnsubsByTask=new Map();
+const RESULT_LIMIT=100;
+const playerUnsubs=new Map(),gamePlayersCache=new Map();
 const gamePlayersLoaded=new Set(),gamePlayersLoading=new Map();
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -522,90 +523,74 @@ function formatStudentInputRecords(data,writingLabel="書寫輸入"){
   ].filter(Boolean).join("")||"—";
 }
 
-function replaceResultCacheForTasks(taskIds,docs){
-  taskIds.forEach(taskId=>resultDocsByTask.delete(taskId));
-  docs.forEach(doc=>{
-    const taskId=String(doc.data().taskId||"");
-    if(!taskId)return;
-    if(!resultDocsByTask.has(taskId))resultDocsByTask.set(taskId,[]);
-    resultDocsByTask.get(taskId).push(doc);
-  });
-}
-
 function getCachedTaskResultDocs(taskId){
-  if(resultCacheError)throw new Error(resultCacheError);
+  const error=resultErrorsByTask.get(taskId);
+  if(error)throw new Error(error);
   return resultDocsByTask.get(taskId)||[];
 }
-
 function scheduleRender(){
   if(resultRefreshTimer)clearTimeout(resultRefreshTimer);
   resultRefreshTimer=setTimeout(async()=>{
     resultRefreshTimer=null;
-    if(!user||!tasksListenerReady||!resultListenerReady)return;
+    if(!user||!tasksListenerReady)return;
     try{await render(latestTaskDocs)}
     catch(e){$("taskList").innerHTML='<div class="status err">'+esc(e.message||e)+'</div>'}
   },180);
 }
-
-function stopResultListeners(){
-  resultListenerGeneration++;
-  resultUnsubs.splice(0).forEach(fn=>fn());
+function stopTaskResultListener(taskId,clearCache=true){
+  const stop=resultUnsubsByTask.get(taskId);
+  if(stop){try{stop()}catch(e){}}
+  resultUnsubsByTask.delete(taskId);
+  if(clearCache){resultDocsByTask.delete(taskId);resultErrorsByTask.delete(taskId)}
 }
-
-function resultTaskDocsForActiveMode(){
-  if(activeMode==="click")return latestTaskDocs.filter(doc=>doc.data().taskMode==="click");
-  if(activeMode==="hanzi")return latestTaskDocs.filter(doc=>doc.data().taskMode==="hanzi"&&!doc.data().hanziSpeechEnabled);
-  if(activeMode==="speaking")return latestTaskDocs.filter(doc=>doc.data().taskMode==="speaking"||(doc.data().taskMode==="hanzi"&&doc.data().hanziSpeechEnabled));
-  if(activeMode==="reading")return latestTaskDocs.filter(doc=>doc.data().taskMode==="reading");
-  if(activeMode==="evaluation")return latestTaskDocs.filter(doc=>!["teaching","game","click","hanzi","speaking","reading"].includes(doc.data().taskMode));
-  return [];
+function stopResultListeners(clearExpanded=false){
+  [...resultUnsubsByTask.keys()].forEach(taskId=>stopTaskResultListener(taskId));
+  if(clearExpanded)expandedResultTaskIds.clear();
 }
-
-function syncActiveResultListeners(force=false){
+function taskDocMatchesActiveMode(doc){
+  const task=doc&&doc.data?doc.data():{};
+  if(activeMode==="click")return task.taskMode==="click";
+  if(activeMode==="hanzi")return task.taskMode==="hanzi"&&!task.hanziSpeechEnabled;
+  if(activeMode==="speaking")return task.taskMode==="speaking"||(task.taskMode==="hanzi"&&task.hanziSpeechEnabled);
+  if(activeMode==="reading")return task.taskMode==="reading";
+  if(activeMode==="evaluation")return !["teaching","game","click","hanzi","speaking","reading"].includes(task.taskMode);
+  return false;
+}
+function syncActiveResultListeners(){
   if(!user||!tasksListenerReady)return;
-  const taskIds=resultTaskDocsForActiveMode().map(doc=>doc.id).sort();
-  const nextKey=activeMode+":"+taskIds.join(",");
-  if(!force&&nextKey===resultListenerTaskKey&&resultListenerReady){scheduleRender();return}
-
-  stopResultListeners();
-  resultListenerTaskKey=nextKey;
-  resultListenerReady=false;
-  resultCacheError="";
-  const generation=resultListenerGeneration;
-
-  if(!taskIds.length){
-    resultListenerReady=true;
-    scheduleRender();
-    return;
-  }
-
-  const chunks=[];
-  for(let i=0;i<taskIds.length;i+=10)chunks.push(taskIds.slice(i,i+10));
-  const readyChunks=new Set();
-  const markChunkReady=index=>{
-    readyChunks.add(index);
-    if(readyChunks.size===chunks.length)resultListenerReady=true;
-    scheduleRender();
-  };
-
-  chunks.forEach((taskIdChunk,index)=>{
+  const validTaskIds=new Set(latestTaskDocs.filter(taskDocMatchesActiveMode).map(doc=>doc.id));
+  [...expandedResultTaskIds].forEach(taskId=>{
+    if(!validTaskIds.has(taskId)){expandedResultTaskIds.delete(taskId);stopTaskResultListener(taskId)}
+  });
+  [...resultUnsubsByTask.keys()].forEach(taskId=>{
+    if(!expandedResultTaskIds.has(taskId))stopTaskResultListener(taskId)
+  });
+  expandedResultTaskIds.forEach(taskId=>{
+    if(resultUnsubsByTask.has(taskId)||!validTaskIds.has(taskId))return;
+    resultDocsByTask.set(taskId,[]);resultErrorsByTask.delete(taskId);
     const stop=db.collection("taskResults")
-      .where("teacherId","==",user.uid)
-      .where("taskId","in",taskIdChunk)
+      .where("taskId","==",taskId)
+      .orderBy("updatedAt","desc")
+      .limit(RESULT_LIMIT)
       .onSnapshot(snap=>{
-        if(generation!==resultListenerGeneration)return;
-        replaceResultCacheForTasks(taskIdChunk,snap.docs);
-        resultCacheError="";
-        markChunkReady(index);
-      },e=>{
-        if(generation!==resultListenerGeneration)return;
-        console.error("學生狀態即時更新失敗",e);
-        resultCacheError=e.message||String(e);
-        markChunkReady(index);
+        resultDocsByTask.set(taskId,snap.docs);resultErrorsByTask.delete(taskId);scheduleRender()
+      },error=>{
+        console.error("學生結果載入失敗",error);resultErrorsByTask.set(taskId,error.message||String(error));scheduleRender()
       });
-    resultUnsubs.push(stop);
+    resultUnsubsByTask.set(taskId,stop);
   });
 }
+function taskResultsExpanded(taskId){return expandedResultTaskIds.has(taskId)}
+function resultToggleButton(taskId){
+  const expanded=taskResultsExpanded(taskId);
+  return `<button class="s" type="button" onclick="toggleTaskResults('${taskId}')">${expanded?"收合學生結果":"查看學生結果（最近100筆）"}</button>`;
+}
+async function toggleTaskResults(taskId){
+  if(expandedResultTaskIds.has(taskId)){expandedResultTaskIds.delete(taskId);stopTaskResultListener(taskId)}
+  else{expandedResultTaskIds.add(taskId);syncActiveResultListeners()}
+  await render(latestTaskDocs);
+}
+window.toggleTaskResults=toggleTaskResults;
 
 function clearGamePlayerListeners(clearCache=true){
   playerUnsubs.forEach(fn=>fn());
@@ -631,9 +616,9 @@ auth.onAuthStateChanged(async u=>{
     $("taskCard").classList.add("hidden");
     $("userArea").classList.add("hidden");
     if(unsub)unsub();
-    stopResultListeners();
-    unsub=null;latestTaskDocs=[];resultListenerReady=false;tasksListenerReady=false;resultListenerTaskKey="";
-    resultDocsByTask=new Map();resultCacheError="";
+    stopResultListeners(true);
+    unsub=null;latestTaskDocs=[];tasksListenerReady=false;
+    resultDocsByTask=new Map();resultErrorsByTask=new Map();
     if(resultRefreshTimer)clearTimeout(resultRefreshTimer);
     resultRefreshTimer=null;
     clearGamePlayerListeners();
@@ -672,17 +657,13 @@ $("copyBtn").onclick=()=>navigator.clipboard.writeText($("qrURL").textContent);
 
 function listen(){
   if(unsub)unsub();
-  stopResultListeners();
+  stopResultListeners(true);
   if(resultRefreshTimer)clearTimeout(resultRefreshTimer);
-  resultRefreshTimer=null;
-  resultListenerReady=false;
-  tasksListenerReady=false;
-  resultDocsByTask=new Map();
-  resultCacheError="";
-  resultListenerTaskKey="";
+  resultRefreshTimer=null;tasksListenerReady=false;
+  resultDocsByTask=new Map();resultErrorsByTask=new Map();
   $("taskList").innerHTML='<div class="status">正在載入任務列表…</div>';
   unsub=db.collection("tasks").where("teacherId","==",user.uid).onSnapshot(
-    s=>{latestTaskDocs=s.docs;tasksListenerReady=true;syncActiveResultListeners()},
+    snap=>{latestTaskDocs=snap.docs;tasksListenerReady=true;syncActiveResultListeners();scheduleRender()},
     e=>$("taskList").innerHTML='<div class="status err">'+esc(e.message||e)+'</div>'
   );
 }
@@ -690,10 +671,8 @@ function listen(){
 async function refreshTasks(){
   const btn=$("refreshBtn");
   btn.disabled=true;btn.textContent="整理中…";
-  try{
-    const snap=await db.collection("tasks").where("teacherId","==",user.uid).get();
-    latestTaskDocs=snap.docs;tasksListenerReady=true;syncActiveResultListeners(true);
-  }catch(e){$("taskList").innerHTML='<div class="status err">'+esc(e.message||e)+'</div>'}
+  try{syncActiveResultListeners();await render(latestTaskDocs)}
+  catch(e){$("taskList").innerHTML='<div class="status err">'+esc(e.message||e)+'</div>'}
   finally{btn.disabled=false;btn.textContent="重新整理"}
 }
 $("refreshBtn").onclick=refreshTasks;
@@ -710,12 +689,12 @@ function applyModeFilter(){
     $("taskList").appendChild(empty);
   }
 }
-modeTabs.forEach(btn=>btn.addEventListener("click",()=>{
+modeTabs.forEach(btn=>btn.addEventListener("click",async()=>{
   const nextMode=btn.dataset.mode;
   if(nextMode===activeMode){applyModeFilter();return}
+  stopResultListeners(true);
   activeMode=nextMode;
-  applyModeFilter();
-  syncActiveResultListeners();
+  await render(latestTaskDocs);
 }));
 
 function getClickAverageSeconds(data){
@@ -833,12 +812,11 @@ async function render(docs){
     const isCustomPhotoRecognition=isPhotoRecognition&&t.recognitionEngine!=="ocr";
     const recognitionInfo=`<div class="meta">辨識方式：${recognitionEngineName(t.recognitionEngine)}</div>`;
     const workflowInfo=t.taskMode==="reading"||t.recognitionEngine==="ocr"&&t.skipPhotoRecognition?'<div class="meta">辨識流程：僅語音辨識（取消拍照辨識）</div>':"";
+    const isExpanded=taskResultsExpanded(doc.id);
     let resultDocs=[],resultError="";
-
-    try{
-      resultDocs=getCachedTaskResultDocs(doc.id);
-    }catch(e){
-      resultError=e.message||String(e);
+    if(isExpanded){
+      try{resultDocs=getCachedTaskResultDocs(doc.id)}
+      catch(e){resultError=e.message||String(e)}
     }
 
     const rows=resultDocs.map(r=>{
@@ -881,7 +859,7 @@ async function render(docs){
       </div>`;
     }).join("");
 
-    const resultSection=resultError
+    const resultSection=!isExpanded?"":resultError
       ? `<div class="status err">${esc(resultError)}</div>`
       : `<div style="margin-top:12px">
           <b>學生完成度（${resultDocs.length} 人）</b>
@@ -926,6 +904,7 @@ async function render(docs){
       </div>
       <div class="row" style="margin-top:12px">
         <button class="s" onclick="showQR('${doc.id}','${esc(t.title||(isAdvanced?"進階評量":isReading?"問答模式(讀)":"拍照辨識模式"))}')">重新產生 QR</button>
+        ${resultToggleButton(doc.id)}
         <button class="s" onclick="exportTaskCSV('${doc.id}')">匯出結果 CSV</button>
         <button class="w" onclick="clearTaskPhotos('${doc.id}')">只清除照片</button>
         <button class="d" onclick="delTask('${doc.id}')">完整刪除</button>
@@ -936,10 +915,12 @@ async function render(docs){
 
   const renderClickTask=async doc=>{
     const t=doc.data();
+    const isExpanded=taskResultsExpanded(doc.id);
     let resultDocs=[],resultError="";
-    try{
-      resultDocs=[...getCachedTaskResultDocs(doc.id)].sort((a,b)=>Number(a.data().studentCode||999)-Number(b.data().studentCode||999));
-    }catch(e){resultError=e.message||String(e)}
+    if(isExpanded){
+      try{resultDocs=[...getCachedTaskResultDocs(doc.id)].sort((a,b)=>Number(a.data().studentCode||999)-Number(b.data().studentCode||999))}
+      catch(e){resultError=e.message||String(e)}
+    }
     const studentRecords=resultDocs.map(resultDoc=>{
       const data=resultDoc.data();
       const averageSeconds=getClickAverageSeconds(data);
@@ -947,7 +928,7 @@ async function render(docs){
         <b>${esc(data.studentName||("學生 "+(data.studentCode||"")))}</b>｜${resultStatusText(data.status)}｜答對 ${Number(data.clickCorrectCount||0)} 次｜答錯 ${Number(data.clickWrongCount||0)} 次｜逾時 ${Number(data.clickMissCount||0)} 次｜平均 ${averageSeconds?averageSeconds.toFixed(2):"—"} 秒
       </div>`;
     }).join("");
-    const resultSection=resultError
+    const resultSection=!isExpanded?"":resultError
       ? `<div class="status err">${esc(resultError)}</div>`
       : `<div style="margin-top:12px"><b>學生端點選紀錄（${resultDocs.length} 人）</b>${studentRecords||'<div class="small" style="padding:10px">尚無學生紀錄</div>'}</div>`;
     return `<div class="task clickTask">
@@ -963,6 +944,7 @@ async function render(docs){
       </div></div>
       <div class="row" style="margin-top:12px">
         <button class="s" onclick="showQR('${doc.id}','${esc(t.title||"點選模式(聽)")}')">重新產生 QR</button>
+        ${resultToggleButton(doc.id)}
         <button class="s" onclick="exportTaskCSV('${doc.id}')">匯出結果 CSV</button>
         <button class="d" onclick="delTask('${doc.id}')">完整刪除</button>
       </div>
@@ -974,9 +956,11 @@ async function render(docs){
     const t=doc.data();let resultDocs=[],resultError="";
     const isSpeaking=t.taskMode==="speaking"||!!t.hanziSpeechEnabled;
     const isPractice=!isSpeaking&&(t.hanziPracticeEnabled===undefined?!t.hanziWritingEnabled:!!t.hanziPracticeEnabled);
-    try{
-      resultDocs=[...getCachedTaskResultDocs(doc.id)].sort((a,b)=>Number(a.data().studentCode||999)-Number(b.data().studentCode||999));
-    }catch(e){resultError=e.message||String(e)}
+    const isExpanded=!isPractice&&taskResultsExpanded(doc.id);
+    if(isExpanded){
+      try{resultDocs=[...getCachedTaskResultDocs(doc.id)].sort((a,b)=>Number(a.data().studentCode||999)-Number(b.data().studentCode||999))}
+      catch(e){resultError=e.message||String(e)}
+    }
     const rows=resultDocs.map(r=>{
       const d=r.data();
       const writtenWrong=[...new Set((d.incorrectClasses||[]).filter(Boolean))];
@@ -997,7 +981,7 @@ async function render(docs){
       const pronunciationAnalysis=isSpeaking?renderPronunciationAnalysis(d):"";
       return `<div class="rr inputResultRow${fiveOrMore.length?" hasFiveWrong":twoOnly.length||threeToFour.length?" hasAnyError":""}"><span>${esc(d.studentName||"未命名")}</span><span>${Number(d.progress||0)}%</span><span>${resultStatusText(d.status)}</span><span>${errors||"—"}</span><span class="studentInputRecords">${studentInputs}</span></div>${pronunciationAnalysis}`;
     }).join("");
-    const resultSection=resultError?`<div class="status err">${esc(resultError)}</div>`:`<div style="margin-top:12px"><b>學生完成度（${resultDocs.length} 人）</b><div class="rr inputResultRow"><b>學生</b><b>進度</b><b>狀態</b><b>辨識錯誤</b><b>學生輸入文字</b></div>${rows||'<div class="small" style="padding:10px">尚無學生紀錄</div>'}</div>`;
+    const resultSection=!isExpanded?"":resultError?`<div class="status err">${esc(resultError)}</div>`:`<div style="margin-top:12px"><b>學生完成度（${resultDocs.length} 人）</b><div class="rr inputResultRow"><b>學生</b><b>進度</b><b>狀態</b><b>辨識錯誤</b><b>學生輸入文字</b></div>${rows||'<div class="small" style="padding:10px">尚無學生紀錄</div>'}</div>`;
     const settings=isSpeaking?`逐項完整文字語音辨識｜每題 ${Math.min(5,Math.max(1,Number(t.hanziRepeatCount||1)))} 次`:isPractice?"中英文書寫練習連結":"學生編號｜設備手寫輸入辨識｜結果回傳";
     const speechStandardInfo=isSpeaking?speechRecognitionStandardInfo(t):"";
     const autoSpeechInfo=isSpeaking?taskToggleInfo("自動唸出題目",!t.disableAutoPromptSpeech):"";
@@ -1006,7 +990,7 @@ async function render(docs){
     const practiceText=Array.isArray(t.hanziTexts)&&t.hanziTexts.length?t.hanziTexts.join("、"):String(t.hanziText||"").trim()||(t.targetClasses||[]).join("");
     const modeName=isSpeaking?"口語模式(說)":"書寫模式(寫)";
     const visibleResultSection=isPractice?"":resultSection;
-    return `<div class="task ${isSpeaking?"speakingTask":"hanziTask"}"><div class="top"><div><span class="modeBadge">${modeName}</span><div class="titleLine"><div class="title">${esc(t.title||modeName)}</div><button class="s restoreTeacherBtn" type="button" onclick="restoreTeacherPlatform('${doc.id}')">回復教師平台</button></div><div class="meta">練習文字：${esc(practiceText)}</div><div class="meta">練習方式：${settings}</div>${speechStandardInfo}${autoSpeechInfo}${slowSpeechInfo}${repeatPromptInfo}</div></div><div class="row" style="margin-top:12px"><button class="s" onclick="showQR('${doc.id}','${esc(t.title||modeName)}')">重新產生 QR</button><button class="s" onclick="exportTaskCSV('${doc.id}')">匯出結果 CSV</button><button class="d" onclick="delTask('${doc.id}')">完整刪除</button></div>${visibleResultSection}</div>`;
+    return `<div class="task ${isSpeaking?"speakingTask":"hanziTask"}"><div class="top"><div><span class="modeBadge">${modeName}</span><div class="titleLine"><div class="title">${esc(t.title||modeName)}</div><button class="s restoreTeacherBtn" type="button" onclick="restoreTeacherPlatform('${doc.id}')">回復教師平台</button></div><div class="meta">練習文字：${esc(practiceText)}</div><div class="meta">練習方式：${settings}</div>${speechStandardInfo}${autoSpeechInfo}${slowSpeechInfo}${repeatPromptInfo}</div></div><div class="row" style="margin-top:12px"><button class="s" onclick="showQR('${doc.id}','${esc(t.title||modeName)}')">重新產生 QR</button>${isPractice?"":resultToggleButton(doc.id)}<button class="s" onclick="exportTaskCSV('${doc.id}')">匯出結果 CSV</button><button class="d" onclick="delTask('${doc.id}')">完整刪除</button></div>${visibleResultSection}</div>`;
   };
 
   const sections=[];
@@ -1394,8 +1378,7 @@ function csvRowForMode(title,data,mode){
 window.exportTaskCSV=async taskId=>{
   try{
     const taskSnap=latestTaskDocs.find(doc=>doc.id===taskId);
-    const canUseResultCache=resultListenerReady&&resultTaskDocsForActiveMode().some(doc=>doc.id===taskId);
-    const resultDocs=canUseResultCache?[...getCachedTaskResultDocs(taskId)]:await getTaskResultDocs(taskId);
+    const resultDocs=await getTaskResultDocs(taskId);
     if(!resultDocs.length){alert("此任務目前沒有學生結果可以匯出。");return}
     const taskData=taskSnap?taskSnap.data():{};
     const title=taskData.title||"任務結果";
