@@ -533,6 +533,14 @@ function replaceResultCacheForTasks(taskIds,docs){
   });
 }
 
+function resultUpdatedMillis(doc){
+  const data=doc&&typeof doc.data==="function"?doc.data():{};
+  const value=data.updatedAt||data.completedAt||data.startedAt;
+  if(value&&typeof value.toMillis==="function")return value.toMillis();
+  if(value&&typeof value.seconds==="number")return value.seconds*1000;
+  return 0;
+}
+
 function getCachedTaskResultDocs(taskId){
   if(resultCacheError)throw new Error(resultCacheError);
   return resultDocsByTask.get(taskId)||[];
@@ -582,11 +590,12 @@ function startTaskResultListener(taskId){
   const stop=db.collection("taskResults")
     .where("teacherId","==",user.uid)
     .where("taskId","==",taskId)
-    .orderBy("updatedAt","desc")
-    .limit(100)
     .onSnapshot(snap=>{
       if(generation!==resultListenerGeneration||expandedTaskId!==taskId)return;
-      replaceResultCacheForTasks([taskId],snap.docs);
+      const recentDocs=[...snap.docs]
+        .sort((a,b)=>resultUpdatedMillis(b)-resultUpdatedMillis(a))
+        .slice(0,100);
+      replaceResultCacheForTasks([taskId],recentDocs);
       resultCacheError="";
       expandedTaskLoading=false;
       scheduleRender();
