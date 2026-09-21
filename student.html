@@ -925,7 +925,7 @@ let consecutiveWrongAttempts=0;
 let totalErrorCount=0;
 let itemErrorCounts={};
 let imageItemErrorCounts={},audioItemErrorCounts={};
-let exitInProgress=false,exitMicrophoneShutdownPromise=null;
+let exitInProgress=false,exitMicrophoneShutdownPromise=null,backgroundMicrophoneShutdownPromise=Promise.resolve();
 let studentLeaveConfirmed=false;
 let studentPageMarkedLeft=false,studentPresenceWritePromise=Promise.resolve();
 let queuedResultRef=null,queuedResultPatch=null,queuedResultTimer=null,queuedResultWaiters=[],studentResultWritePromise=Promise.resolve();
@@ -3092,7 +3092,11 @@ function recognizeHanziSpeech({automatic=false,resumeSession=false,continuedSpee
       "audio-capture":"找不到可用的麥克風，請確認麥克風已連接，並在系統音效設定中選為輸入裝置。",
       "network":"語音辨識服務連線失敗，請確認網路後再試一次。"
     }[error]||`語音辨識失敗：${error}`;
-    const recoverable=!['not-allowed','service-not-allowed','audio-capture','network'].includes(event.error);
+    const recoverable=!['not-allowed','service-not-allowed','audio-capture'].includes(event.error);
+    if(event.error==="network"){
+      resumeRecognition("語音辨識服務暫時中斷，正在重新連線…");
+      return;
+    }
     if(recoverable){
       resumeRecognition("正在聆聽，請念出畫面上的字…");
       return;
@@ -5581,7 +5585,11 @@ async function startOptionalAudioRecognition({automatic=false,resumeSession=fals
       "network":"語音辨識服務連線失敗，請確認網路。",
       "no-speech":"沒有聽到語音，請靠近麥克風再試一次。"
     }[event.error]||"語音辨識失敗，請重新嘗試。";
-    const recoverable=!['not-allowed','service-not-allowed','audio-capture','network'].includes(event.error);
+    const recoverable=!['not-allowed','service-not-allowed','audio-capture'].includes(event.error);
+    if(event.error==="network"){
+      resumeRecognition("語音辨識服務暫時中斷，正在重新連線…");
+      return;
+    }
     if(recoverable&&(!lastHeard||(!lastResultWasFinal&&optionalAudioSessionDeadline<0))){
       resumeRecognition(lastHeard?"正在接續語音辨識，請繼續回答…":"正在聆聽");
       return;
@@ -5723,11 +5731,18 @@ function detachAudioRecognizerStream(recognizer){
   try{extractor.stream=null}catch(e){}
 }
 
-function releaseStudentMicrophoneForBackground(){
+async function releaseStudentMicrophoneForBackground(){
+  const recognitions=[...new Set([
+    ...trackedSpeechRecognitions,
+    browserSpeechRecognition,
+    hanziSpeechRecognition
+  ].filter(Boolean))];
   const recognizer=activeAudioRecognizer||(projectType==="audio"?model:null);
+  const speechShutdowns=recognitions.map(waitForSpeechRecognitionShutdown);
   pauseStudentMicrophone();
   detachAudioRecognizerStream(recognizer);
   stopTrackedMicrophoneTracks();
+  await Promise.all(speechShutdowns);
 }
 
 async function shutdownStudentMicrophoneForExit(){
@@ -6315,7 +6330,12 @@ function stopAll(preserveClickRound=false){
 function pauseStudentPageForBackground(){
   const shouldPausePage=!pageAutoPaused&&!finished&&!!task&&!paused;
   if(shouldPausePage)pageAutoPaused=true;
-  releaseStudentMicrophoneForBackground();
+  const previousShutdown=backgroundMicrophoneShutdownPromise;
+  const currentShutdown=releaseStudentMicrophoneForBackground();
+  backgroundMicrophoneShutdownPromise=Promise.all([previousShutdown,currentShutdown]).catch(()=>{
+    stopTrackedSpeechRecognitions(true);
+    stopTrackedMicrophoneTracks();
+  });
   markStudentPageAsLeft();
   if(!shouldPausePage)return;
   stopAll(isClickMode());
@@ -6326,6 +6346,9 @@ function pauseStudentPageForBackground(){
 }
 
 async function resumeStudentPageFromBackground(){
+  if(document.hidden||!pageAutoPaused||finished||!task||paused)return;
+  try{await backgroundMicrophoneShutdownPromise}catch(e){}
+  backgroundMicrophoneShutdownPromise=Promise.resolve();
   if(document.hidden||!pageAutoPaused||finished||!task||paused)return;
   pageAutoPaused=false;
   try{
