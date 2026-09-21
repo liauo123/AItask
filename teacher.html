@@ -7,8 +7,6 @@
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -321,6 +319,29 @@ firebase.initializeApp(firebaseConfig);const auth=firebase.auth(),db=firebase.fi
 const firestorePersistenceReady=db.enablePersistence({synchronizeTabs:true}).catch(error=>{
   if(!["failed-precondition","unimplemented"].includes(error.code))console.warn("Firestore 本機快取啟用失敗：",error);
 });
+const TEACHER_AI_SCRIPT_URLS={
+  tfjs:"https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js",
+  tmImage:"https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"
+};
+const teacherAIScriptPromises=new Map();
+function loadTeacherAIScript(url,globalName,label){
+  if(globalName&&window[globalName])return Promise.resolve();
+  if(teacherAIScriptPromises.has(url))return teacherAIScriptPromises.get(url);
+  const promise=new Promise((resolve,reject)=>{
+    const script=document.createElement("script");
+    const timer=setTimeout(()=>reject(new Error(label+"載入逾時，請檢查網路後重試。")),20000);
+    script.src=url;script.async=true;
+    script.onload=()=>{clearTimeout(timer);globalName&&!window[globalName]?reject(new Error(label+"載入不完整。")):resolve()};
+    script.onerror=()=>{clearTimeout(timer);reject(new Error(label+"載入失敗。"))};
+    document.head.appendChild(script);
+  }).catch(error=>{teacherAIScriptPromises.delete(url);throw error});
+  teacherAIScriptPromises.set(url,promise);
+  return promise;
+}
+async function ensureTeacherImageRecognitionRuntime(){
+  await loadTeacherAIScript(TEACHER_AI_SCRIPT_URLS.tfjs,"tf","TensorFlow");
+  await loadTeacherAIScript(TEACHER_AI_SCRIPT_URLS.tmImage,"tmImage","Teachable Machine");
+}
 let user=null,model=null,modelURL="",labels=[],unsub=null,classThumbnails={};
 const THUMBNAIL_OUTPUT_SIZE=240;
 const THUMBNAIL_MAX_BYTES=40*1024;
@@ -594,6 +615,8 @@ $("loadModelBtn").onclick=async()=>{
       if(!labels.length)throw new Error("請至少輸入一項要辨識的文字。");
       model={getClassLabels:()=>[...labels]};
     }else{
+      status("modelStatus","正在載入圖片辨識元件，請稍候…");
+      await ensureTeacherImageRecognitionRuntime();
       model=await tmImage.load(modelURL+"model.json",modelURL+"metadata.json");
       labels=model.getClassLabels();
     }
