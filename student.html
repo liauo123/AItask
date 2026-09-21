@@ -892,6 +892,52 @@ let taskId="",task=null,projectType="",metadata=null,model=null;
 let ocrWorker=null,lastOcrText="",lastOcrConfidence=0;
 let browserSpeechRecognition=null,optionalAudioListening=false,optionalAudioStarting=false,optionalAudioTimer=null,optionalAudioStartWatchdog=null,optionalAudioSessionDeadline=0,optionalAudioResumeTimer=null;
 let resultRef=null,currentIndex=0,completed=[],attempts=0,holdCount=0,finished=false,paused=false;
+const RESULT_UPDATE_DEBOUNCE_MS=650;
+let pendingResultUpdate=null,pendingResultUpdateRef=null,pendingResultUpdateTimer=null;
+let resultUpdateWritePromise=Promise.resolve();
+
+function mergePendingResultUpdate(patch){
+  pendingResultUpdate={...(pendingResultUpdate||{}),...patch};
+}
+
+function flushPendingResultUpdate(){
+  if(pendingResultUpdateTimer){
+    clearTimeout(pendingResultUpdateTimer);
+    pendingResultUpdateTimer=null;
+  }
+  const patch=pendingResultUpdate;
+  const targetRef=pendingResultUpdateRef;
+  pendingResultUpdate=null;
+  pendingResultUpdateRef=null;
+  if(!patch||!targetRef)return resultUpdateWritePromise;
+  resultUpdateWritePromise=resultUpdateWritePromise.catch(()=>{}).then(()=>targetRef.update(patch));
+  return resultUpdateWritePromise;
+}
+
+function queueResultUpdate(patch,options={}){
+  const targetRef=resultRef;
+  if(!targetRef||!patch||typeof patch!=="object")return Promise.resolve();
+  const hasOwn=key=>Object.prototype.hasOwnProperty.call(patch,key);
+  const immediate=!!options.immediate
+    ||patch.status==="completed"
+    ||patch.status==="left"
+    ||hasOwn("completedAt")
+    ||hasOwn("leftAt")
+    ||hasOwn("gameRank")
+    ||hasOwn("skippedClasses");
+  if(pendingResultUpdateRef&&pendingResultUpdateRef!==targetRef){
+    void flushPendingResultUpdate().catch(error=>console.error("學生結果合併寫入失敗",error));
+  }
+  pendingResultUpdateRef=targetRef;
+  mergePendingResultUpdate(patch);
+  if(immediate)return flushPendingResultUpdate();
+  if(pendingResultUpdateTimer)clearTimeout(pendingResultUpdateTimer);
+  pendingResultUpdateTimer=setTimeout(()=>{
+    pendingResultUpdateTimer=null;
+    void flushPendingResultUpdate().catch(error=>console.error("學生結果合併寫入失敗",error));
+  },RESULT_UPDATE_DEBOUNCE_MS);
+  return Promise.resolve();
+}
 let imageStream=null;
 let poseWebcam=null,poseCtx=null,poseRaf=null,posePredicting=false,poseVideoStream=null,poseVideo=null;
 let audioListening=false,audioStarting=false,audioStopPromise=null,activeAudioRecognizer=null;
@@ -1911,7 +1957,7 @@ async function skipCurrentQuestionAfterReminderLimit(){
   resetCurrentVerification();
   if(resultRef){
     try{
-      await resultRef.update({
+      await queueResultUpdate({
         completedClasses:[...completed],
         skippedClasses:firebase.firestore.FieldValue.arrayUnion(item),
         progress:Math.round(completed.length/task.targetClasses.length*100),
@@ -2763,7 +2809,7 @@ async function submitHanziWritingAnswer(){
     showCaptureFeedback("failure","再寫一次",1500);
     if(resultRef){
       try{
-        await resultRef.update({
+        await queueResultUpdate({
           attempts,
           errorCount:totalErrorCount,
           itemErrorCounts:{...itemErrorCounts},
@@ -2789,7 +2835,7 @@ async function submitHanziWritingAnswer(){
 
 async function saveHanziProgress(done=false){
   if(!resultRef||studentLeaveConfirmed||exitInProgress||pageAutoPaused)return;
-  await resultRef.update({
+  await queueResultUpdate({
     completedClasses:[...completed],incorrectClasses:[...new Set(localIncorrectClasses)],incorrectAudioClasses:[...new Set(localIncorrectAudioClasses)],
     progress:Math.round(completed.length/task.targetClasses.length*100),attempts,errorCount:totalErrorCount,itemErrorCounts:{...itemErrorCounts},imageItemErrorCounts:{...imageItemErrorCounts},audioItemErrorCounts:{...audioItemErrorCounts},status:done?"completed":"inProgress",
     updatedAt:firebase.firestore.FieldValue.serverTimestamp(),...(done?{completedAt:firebase.firestore.FieldValue.serverTimestamp()}:{})
@@ -2800,7 +2846,7 @@ async function completeHanziCharacter(skipped=false){
   const target=task.targetClasses[currentIndex];
   if(skipped&&resultRef){
     try{
-      await resultRef.update({
+      await queueResultUpdate({
         skippedClasses:firebase.firestore.FieldValue.arrayUnion(target),
         updatedAt:firebase.firestore.FieldValue.serverTimestamp()
       });
@@ -2991,7 +3037,7 @@ function recognizeHanziSpeech({automatic=false,resumeSession=false,continuedSpee
         const repeatedPrompt=repeatPromptAfterError?repeatQuestionPromptAfterSpeechError():null;
         if(resultRef){
           try{
-            await resultRef.update({
+            await queueResultUpdate({
               attempts,
               errorCount:totalErrorCount,
               itemErrorCounts:{...itemErrorCounts},
@@ -3359,7 +3405,7 @@ async function saveClickProgress(completedStatus=false){
     ? Number((correct.reduce((sum,record)=>sum+Number(record.reactionMs||0),0)/correct.length/1000).toFixed(2))
     : 0;
   const progress=Math.round(clickRecords.length/Math.max(1,getClickTotalCount())*100);
-  await resultRef.update({
+  await queueResultUpdate({
     clickCorrectCount:correct.length,
     clickWrongCount,
     clickMissCount:misses.length,
@@ -3563,7 +3609,7 @@ $("clickTargets").addEventListener("click",event=>{
   if(label!==clickCurrentTarget){
     clickWrongCount++;
     if(resultRef){
-      resultRef.update({
+      queueResultUpdate({
         clickWrongCount,
         updatedAt:firebase.firestore.FieldValue.serverTimestamp()
       }).catch(e=>console.error("點選答錯次數寫入失敗",e));
@@ -4215,7 +4261,7 @@ async function captureAndRecognize(){
       if(resultRef&&target){
         const recognizedInput=isOcrRecognition()?String(lastOcrText||"").trim():"";
         try{
-          await resultRef.update({
+          await queueResultUpdate({
             attempts,
             errorCount:totalErrorCount,
             itemErrorCounts:{...itemErrorCounts},
@@ -5261,7 +5307,7 @@ async function recordOptionalAudioFailure(target,countTowardLimit=true,inputText
   }
   if(resultRef&&target){
     try{
-      await resultRef.update({
+      await queueResultUpdate({
         attempts,
         errorCount:totalErrorCount,
         itemErrorCounts:{...itemErrorCounts},
@@ -5765,6 +5811,7 @@ function queueStudentPresenceStatus(status){
   if(!currentResultRef&&!currentGamePlayerRef)return studentPresenceWritePromise;
   studentPresenceWritePromise=studentPresenceWritePromise.catch(()=>{}).then(async()=>{
     if(studentLeaveConfirmed||exitInProgress)return;
+    await flushPendingResultUpdate().catch(error=>console.warn("離開頁面前寫入學生結果失敗",error));
     const timestamp=firebase.firestore.FieldValue.serverTimestamp();
     const writes=[];
     if(currentResultRef===resultRef){
@@ -5803,11 +5850,12 @@ function restoreStudentPagePresence(){
 }
 
 async function recordConfirmedStudentLeave(){
+  await flushPendingResultUpdate().catch(()=>{});
   await studentPresenceWritePromise.catch(()=>{});
   const timestamp=firebase.firestore.FieldValue.serverTimestamp();
   const writes=[];
   if(resultRef){
-    writes.push(resultRef.update({
+    writes.push(queueResultUpdate({
       status:"left",
       leftAt:timestamp,
       updatedAt:timestamp
@@ -6000,7 +6048,7 @@ async function claimGameRank(){
       return nextRank;
     });
     gameRank=rank;
-    if(resultRef)await resultRef.update({gameRank:rank});
+    if(resultRef)await queueResultUpdate({gameRank:rank});
     return rank;
   }catch(e){
     console.error("遊戲名次寫入失敗",e);
@@ -6045,7 +6093,7 @@ async function completeCurrent(confidence,evidenceCanvas,evidenceDataURL="",audi
       await resultRef.collection("evidence").add(evidence);
       if(studentLeaveConfirmed||exitInProgress||pageAutoPaused)return;
       const progress=Math.round(completed.length/task.targetClasses.length*100);
-      await resultRef.update({
+      await queueResultUpdate({
         completedClasses:[...completed],
         progress,
         attempts,
