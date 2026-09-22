@@ -2284,6 +2284,9 @@ async function loadTask(){
     const savedMode=task.taskMode||task.orderMode||"task";
     const readingModeHint=requestedMode==="reading"||task.interactionMode==="reading"||/reading-mode/i.test(String(task.version||""));
     task.taskMode=readingModeHint?"reading":savedMode;
+    if(!["teaching","advanced","game","click","hanzi","speaking","reading"].includes(task.taskMode)){
+      throw new Error("此任務模式已移除，請向教師索取其他模式的新任務。");
+    }
     applyTaskModeTheme(task.taskMode);
     task.recognitionEngine=["coco-ssd","ocr"].includes(task.recognitionEngine)
       ? task.recognitionEngine
@@ -2304,11 +2307,9 @@ async function loadTask(){
     task.audioRequiredClasses=Array.isArray(task.audioRequiredClasses)
       ? task.audioRequiredClasses.filter(name=>task.targetClasses.includes(name))
       : [];
-    task.skipPhotoRecognition=isReadingMode()
+    task.skipPhotoRecognition=isReadingMode()||isGameMode()
       ? true
-      : isGameMode()
-        ? !!task.skipPhotoRecognition
-        : task.recognitionEngine==="ocr"&&isEvaluationMode()&&!!task.skipPhotoRecognition;
+      : task.recognitionEngine==="ocr"&&isEvaluationMode()&&!!task.skipPhotoRecognition;
     if(task.skipPhotoRecognition)task.audioRequiredClasses=[...task.targetClasses];
     task.promptMode=task.promptMode==="description"?"description":"name";
     task.showNameText=task.recognitionEngine==="ocr"&&!!task.showNameText;
@@ -2326,6 +2327,9 @@ async function loadTask(){
       task.relaxedSpeechRecognition=false;
       task.fuzzySpeechRecognition=false;
     }else if(isGameMode()){
+      task.speechRecognitionEnabled=true;
+      task.skipPhotoRecognition=true;
+      task.audioRequiredClasses=[...task.targetClasses];
       task.showNameText=false;
       task.showThumbnailHint=true;
     }
