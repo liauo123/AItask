@@ -1406,10 +1406,7 @@ async function createHanziModeQR(){
       version:"3.8-hanzi-device-writing",
       createdAt:firebase.firestore.FieldValue.serverTimestamp()
     });
-    const detail=writingAssessmentEnabled
-      ? "學生選擇編號後，使用設備手寫輸入作答；系統判斷正誤並回傳任務列表。"
-      : "學生可逐字選擇並開啟中文筆順練習。";
-    status("hanziStatus",`書寫模式(寫)建立成功！\n${detail}\nTask ID：${ref.id}`,"ok");
+    status("hanziStatus",`書寫模式(寫)建立成功！\nTask ID：${ref.id}`,"ok");
     showQR(ref.id,title);
   }catch(e){
     status("hanziStatus","建立書寫模式(寫)失敗：\n"+(e.message||e),"err");
