@@ -311,6 +311,18 @@ body[data-mode-theme] .target-thumbnail{box-shadow:0 5px 14px var(--mode-shadow)
 body[data-mode-theme] .progress>div{background:var(--primary)}
 .hanzi-card{background:#fff1f2;border:2px solid #fb7185}.hanzi-card h2{color:#991b1b;text-align:center}.hanzi-picker{display:grid;grid-template-columns:repeat(auto-fit,minmax(76px,1fr));gap:12px;margin-top:14px}.hanzi-picker.single{grid-template-columns:minmax(96px,180px);justify-content:center}.hanzi-char{min-height:76px;background:#fff;border:2px solid #fb7185;color:#991b1b;font-size:34px;border-radius:16px}.hanzi-question-row{display:flex;align-items:center;justify-content:center;gap:12px;margin:10px}.hanzi-question{text-align:center;font-size:clamp(32px,10vw,64px);font-weight:900;color:#991b1b;line-height:1.35;word-break:break-all}.hanzi-prompt-icon{flex:0 0 46px}.hanzi-note{text-align:center;color:#7f1d1d;line-height:1.6}.hanzi-copyright{margin-top:14px;padding:12px;border:1px solid #fb7185;border-radius:12px;background:#fff;color:#7f1d1d;font-size:.88rem;line-height:1.7}.hanzi-copyright a{color:#991b1b;font-weight:800}.hanzi-stage-title{text-align:center;font-weight:900;color:#991b1b}.hanzi-speech{padding:18px;text-align:center;background:#ffe4e6;border-radius:16px;margin-top:12px}
 .hanzi-writing{padding:18px;background:#ffe4e6;border:1px solid #fb7185;border-radius:16px;margin-top:12px;text-align:center}.hanzi-writing label{display:block;color:#7f1d1d;font-weight:900;margin-bottom:10px}.hanzi-writing-row{display:flex;gap:10px;align-items:stretch}.hanzi-writing input{min-width:0;flex:1;font-size:clamp(24px,6vw,36px);font-weight:900;text-align:center;border:2px solid #fb7185;background:#fff;color:#991b1b}.hanzi-writing button{flex:0 0 auto;background:#dc2626;color:#fff;border-color:#dc2626}
+.hanzi-practice-modal{position:fixed;inset:0;z-index:1800;padding:max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));display:grid;place-items:center;background:rgba(15,23,42,.72);backdrop-filter:blur(5px)}
+.hanzi-practice-dialog{width:min(100%,620px);max-height:100%;display:flex;flex-direction:column;overflow:hidden;border:2px solid #fb7185;border-radius:22px;background:#fff;box-shadow:0 24px 70px rgba(15,23,42,.38)}
+.hanzi-practice-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;background:#fff1f2;color:#991b1b}.hanzi-practice-head h2{margin:0;font-size:clamp(1.08rem,4vw,1.35rem)}
+.hanzi-practice-close{min-width:48px;min-height:48px;padding:0;border:2px solid #fecaca;background:#fff;color:#991b1b;font-size:24px;line-height:1}
+.hanzi-practice-help{margin:0;padding:9px 14px;background:#fff7ed;color:#9a3412;font-weight:800;text-align:center;line-height:1.45}
+.hanzi-practice-frame-wrap{min-height:0;flex:1;display:grid;place-items:center;overflow:auto;background:#f8fafc}
+.hanzi-practice-frame{display:block;width:min(100%,520px);height:min(620px,calc(100dvh - 190px));min-height:430px;border:0;background:#fff}
+.hanzi-practice-actions{display:grid;grid-template-columns:1fr 1.25fr;gap:10px;padding:12px 14px;border-top:1px solid #fecaca;background:#fff}
+.hanzi-practice-actions a,.hanzi-practice-actions button{min-height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;padding:8px 12px;font-weight:900;text-decoration:none;text-align:center}
+.hanzi-practice-actions a{border:1px solid #cbd5e1;background:#f1f5f9;color:#334155}.hanzi-practice-actions button{background:#dc2626;color:#fff}
+body.hanzi-practice-open{overflow:hidden}
+@media(max-width:480px){.hanzi-practice-modal{padding:0}.hanzi-practice-dialog{width:100%;height:100%;max-height:none;border:0;border-radius:0}.hanzi-practice-frame{width:100%;height:100%;min-height:0}.hanzi-practice-actions{padding-bottom:max(12px,env(safe-area-inset-bottom));grid-template-columns:1fr}}
 body[data-mode-theme="speaking"] .hanzi-card{background:#f0f7ff;border-color:#93c5fd}
 body[data-mode-theme="speaking"] .hanzi-card h2,
 body[data-mode-theme="speaking"] .hanzi-question,
@@ -732,7 +744,7 @@ body.safari-browser[data-mode-theme="reading"] .recognition-actions #voiceRecogn
     <h2 id="hanziTaskTitle">書寫模式(寫)</h2>
     <div id="hanziPracticeIntro" class="hanzi-note"></div>
     <div id="hanziPicker" class="hanzi-picker"></div>
-    <div id="hanziCopyrightNotice" class="hanzi-copyright hidden">點選中文字後，將開啟教育部《國字標準字體筆順學習網》；點選英文字母後，將開啟 Tiny Steps 英文字母描寫練習。本系統僅提供網站連結；外部網站頁面、文字、圖像與書寫內容的著作權及使用規範，均依各網站公告為準。<br><a href="https://stroke-order.learningweb.moe.edu.tw/" target="_blank" rel="noopener noreferrer">教育部國字標準字體筆順學習網</a>｜<a href="https://tinystepslearning.com/free-letter-tracing-game-for-kids" target="_blank" rel="noopener noreferrer">Tiny Steps 英文字母描寫練習</a></div>
+    <div id="hanziCopyrightNotice" class="hanzi-copyright hidden">點選中文字後，將在平台內顯示教育部《國字標準字體筆順學習網》練習器；點選英文字母後，將開啟 Tiny Steps 英文字母描寫練習。本系統僅嵌入或連結外部網站；外部網站頁面、文字、圖像與書寫內容的著作權及使用規範，均依各網站公告為準。<br><a href="https://stroke-order.learningweb.moe.edu.tw/" target="_blank" rel="noopener noreferrer">教育部國字標準字體筆順學習網</a>｜<a href="https://tinystepslearning.com/free-letter-tracing-game-for-kids" target="_blank" rel="noopener noreferrer">Tiny Steps 英文字母描寫練習</a></div>
     <div id="hanziTestPanel" class="hidden">
       <div class="progress-label"><b>測驗進度</b><span id="hanziProgressText">0 / 0</span></div>
       <div class="progress"><div id="hanziProgressFill"></div></div>
@@ -755,6 +767,23 @@ body.safari-browser[data-mode-theme="reading"] .recognition-actions #voiceRecogn
       <div id="hanziStatus" class="status">等待作答。</div>
     </div>
   </section>
+
+  <div id="hanziPracticeModal" class="hanzi-practice-modal hidden" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="hanziPracticeModalTitle">
+    <div class="hanzi-practice-dialog">
+      <div class="hanzi-practice-head">
+        <h2 id="hanziPracticeModalTitle">教育部筆順練習：<span id="hanziPracticeCharacter">—</span></h2>
+        <button id="closeHanziPracticeBtn" class="hanzi-practice-close" type="button" aria-label="關閉筆順練習" title="關閉筆順練習">✕</button>
+      </div>
+      <p class="hanzi-practice-help">請先選擇「筆順練習」，完成後按下方按鈕返回平台。</p>
+      <div class="hanzi-practice-frame-wrap">
+        <iframe id="hanziPracticeFrame" class="hanzi-practice-frame" title="教育部國字筆順練習" src="about:blank" allow="fullscreen; autoplay" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+      </div>
+      <div class="hanzi-practice-actions">
+        <a id="openHanziPracticeExternal" href="https://stroke-order.learningweb.moe.edu.tw/" target="_blank" rel="noopener noreferrer">無法顯示時另開</a>
+        <button id="finishHanziPracticeBtn" type="button">完成練習，返回平台</button>
+      </div>
+    </div>
+  </div>
 
   <section id="completeCard" class="card hidden complete">
     <div id="completeIcon" class="icon">🎉</div>
@@ -954,7 +983,7 @@ function queueStudentResultWrite(patch,delay=350){
 }
 let clickSequence=[],clickTrialIndex=0,clickRecords=[],clickWrongCount=0,clickTrialTimer=null,clickNextTimer=null,clickShownAt=0,clickTrialActive=false,clickCurrentTarget="",clickCurrentChoices=[];
 let hanziSpeechRecognition=null,hanziSpeechStarting=false,hanziSpeechStartWatchdog=null,hanziSpeechInputTimer=null,hanziSpeechSessionDeadline=0,hanziSpeechResumeTimer=null;
-let hanziPracticeItems=[];
+let hanziPracticeItems=[],hanziPracticeTrigger=null;
 
 const $=id=>document.getElementById(id);
 const numberButtons=[...document.querySelectorAll(".number-btn")];
@@ -2700,6 +2729,45 @@ function renderHanziPracticeCharacter(){
     const text=String(character||"");
     return `<button class="hanzi-char" type="button" data-hanzi="${escapeHtml(text)}">${escapeHtml(text)}</button>`;
   }).join("");
+}
+
+function getMoeStrokePracticeUrls(character){
+  const text=String(character||"");
+  if(!/^\p{Script=Han}$/u.test(text))return null;
+  const id=text.codePointAt(0);
+  if(!Number.isInteger(id))return null;
+  const frameUrl=new URL("https://stroke-order.learningweb.moe.edu.tw/dictFrame.jsp");
+  const pageUrl=new URL("https://stroke-order.learningweb.moe.edu.tw/dictView.jsp");
+  frameUrl.searchParams.set("ID",String(id));
+  pageUrl.searchParams.set("ID",String(id));
+  return {frameUrl:frameUrl.toString(),pageUrl:pageUrl.toString()};
+}
+
+function openHanziPractice(character,trigger=null){
+  const urls=getMoeStrokePracticeUrls(character);
+  if(!urls)return;
+  hanziPracticeTrigger=trigger instanceof HTMLElement?trigger:null;
+  $("hanziPracticeCharacter").textContent=character;
+  $("hanziPracticeFrame").title=`教育部「${character}」字筆順練習`;
+  $("hanziPracticeFrame").src=urls.frameUrl;
+  $("openHanziPracticeExternal").href=urls.pageUrl;
+  $("hanziPracticeModal").classList.remove("hidden");
+  $("hanziPracticeModal").setAttribute("aria-hidden","false");
+  document.body.classList.add("hanzi-practice-open");
+  $("closeHanziPracticeBtn").focus();
+}
+
+function closeHanziPractice(restoreFocus=true){
+  const modal=$("hanziPracticeModal");
+  if(!modal||modal.classList.contains("hidden"))return;
+  modal.classList.add("hidden");
+  modal.setAttribute("aria-hidden","true");
+  $("hanziPracticeFrame").src="about:blank";
+  document.body.classList.remove("hanzi-practice-open");
+  if(restoreFocus&&hanziPracticeTrigger&&document.contains(hanziPracticeTrigger)){
+    hanziPracticeTrigger.focus();
+  }
+  hanziPracticeTrigger=null;
 }
 
 function disableHanziCamera(){
@@ -6482,9 +6550,18 @@ $("hanziPicker").addEventListener("click",event=>{
     return;
   }
   if(/^\p{Script=Han}$/u.test(character)){
-    const url=new URL("https://stroke-order.learningweb.moe.edu.tw/searchW.jsp");
-    url.searchParams.set("WORD",character);
-    window.open(url.toString(),"_blank","noopener");
+    openHanziPractice(character,button);
+  }
+});
+$("closeHanziPracticeBtn").onclick=()=>closeHanziPractice();
+$("finishHanziPracticeBtn").onclick=()=>closeHanziPractice();
+$("hanziPracticeModal").addEventListener("click",event=>{
+  if(event.target===$("hanziPracticeModal"))closeHanziPractice();
+});
+document.addEventListener("keydown",event=>{
+  if(event.key==="Escape"&&!$("hanziPracticeModal").classList.contains("hidden")){
+    event.preventDefault();
+    closeHanziPractice();
   }
 });
 $("againBtn").onclick=()=>{if(!primeSafariFirstQuestionSpeech())unlockPlatformSpeech();return repeatTask()};
