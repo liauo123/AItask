@@ -115,7 +115,7 @@ button:hover,.navBtn:hover{transform:translateY(-1px);filter:brightness(.99)}
       <button class="modeTab speakingTab" type="button" data-mode="speaking" role="tab" aria-selected="false">口語模式(說)</button>
       <button class="modeTab readingTab" type="button" data-mode="reading" role="tab" aria-selected="false">問答模式(讀)</button>
       <button class="modeTab hanziTab" type="button" data-mode="hanzi" role="tab" aria-selected="false">書寫模式(寫)</button>
-      <button class="modeTab gameTab" type="button" data-mode="game" role="tab" aria-selected="false">多人遊戲模式</button>
+      <button class="modeTab gameTab" type="button" data-mode="game" role="tab" aria-selected="false">多人回答模式</button>
     </div>
     <div class="small listHint">點選上方模式按鈕可查看相關資訊列表。可先匯出學生結果，再只清除辨識照片；「完整刪除」會一併清除學生紀錄、照片與遊戲資料。</div>
     <div id="taskList"></div>
@@ -720,7 +720,7 @@ function applyModeFilter(){
   sections.forEach(section=>section.classList.toggle("hidden",section.dataset.mode!==activeMode));
   const oldEmpty=$("modeEmpty");if(oldEmpty)oldEmpty.remove();
   if(!sections.some(section=>section.dataset.mode===activeMode)){
-    const names={click:"點選模式(聽)",speaking:"口語模式(說)",reading:"問答模式(讀)",hanzi:"書寫模式(寫)",game:"多人遊戲模式"};
+    const names={click:"點選模式(聽)",speaking:"口語模式(說)",reading:"問答模式(讀)",hanzi:"書寫模式(寫)",game:"多人回答模式"};
     const empty=document.createElement("div");empty.id="modeEmpty";empty.className="status";empty.textContent="目前沒有「"+names[activeMode]+"」資料。";
     $("taskList").appendChild(empty);
   }
@@ -795,8 +795,6 @@ async function render(docs){
 
   const renderGameTask=doc=>{
     const t=doc.data();
-    const recognitionInfo=`<div class="meta">辨識方式：${recognitionEngineName(t.recognitionEngine)}</div>`;
-    const workflowInfo=t.recognitionEngine==="ocr"&&t.skipPhotoRecognition?'<div class="meta">辨識流程：僅語音辨識（取消拍照辨識）</div>':"";
     const stateText={lobby:"等待學生加入",active:"遊戲進行中",finished:"遊戲已結束"}[t.gameStatus]||"等待學生加入";
     const audioItems=Array.isArray(t.audioRequiredClasses)
       ? t.audioRequiredClasses.filter(name=>(t.targetClasses||[]).includes(name))
@@ -812,16 +810,14 @@ async function render(docs){
     return `<div class="task gameTask">
       <div class="top">
         <div>
-          <span class="modeBadge">多人遊戲模式</span>
+          <span class="modeBadge">多人回答模式</span>
           <div class="titleLine">
             <div class="title">${esc(t.title||"未命名遊戲")}</div>
             <button class="s restoreTeacherBtn" type="button" onclick="restoreTeacherPlatform('${doc.id}')">回復教師平台</button>
           </div>
-          ${recognitionInfo}
-          ${workflowInfo}
           ${promptInfo}
           ${slowSpeechInfo}
-          <div class="meta">尋找順序：${(t.targetClasses||[]).map(esc).join(" → ")}</div>
+          <div class="meta">回答文字：${(t.targetClasses||[]).map(esc).join(" → ")}</div>
           ${speechStandardInfo}
           <span class="gameState" id="gameState_${doc.id}">${stateText}</span>
         </div>
@@ -1053,7 +1049,7 @@ async function render(docs){
   }
 
   if(gameDocs.length){
-    sections.push('<section class="modeSection game" data-mode="game"><h2 class="modeTitle">多人遊戲模式</h2>');
+    sections.push('<section class="modeSection game" data-mode="game"><h2 class="modeTitle">多人回答模式</h2>');
     sections.push(gameDocs.map(renderGameTask).join(""));
     sections.push('</section>');
   }

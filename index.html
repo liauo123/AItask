@@ -267,7 +267,7 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none}
 
       <section id="gameModeCard" class="card modeCard gameMode hidden">
         <div class="speakingTitleRow">
-          <h2>多人遊戲模式</h2>
+          <h2>多人回答模式</h2>
           <div class="speechMatchingSettings">
             <label class="relaxedSpeechSetting"><input id="gameRelaxedSpeechRecognition" type="checkbox">放寬語音辨識標準</label>
             <label class="relaxedSpeechSetting" title="開啟日常生活近義詞與語意關鍵詞辨識；主要詞、否定詞及方向仍須正確"><input id="gameFuzzySpeechRecognition" type="checkbox">語音模糊辨識</label>
@@ -1149,7 +1149,7 @@ async function createGameModeQR(){
     if(missingDescriptions.length)return status("gameStatus","說明文字出題需要先填寫每個勾選物品的說明：\n"+missingDescriptions.join("、"),"err");
   }
   $("createGameBtn").disabled=true;
-  status("gameStatus","正在建立多人遊戲等待室…");
+  status("gameStatus","正在建立多人回答模式等待室…");
   try{
     const ref=await db.collection("tasks").add({
       teacherId:user.uid,
