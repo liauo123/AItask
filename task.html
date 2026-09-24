@@ -948,8 +948,15 @@ async function render(docs){
     const studentRecords=resultDocs.map(resultDoc=>{
       const data=resultDoc.data();
       const averageSeconds=getClickAverageSeconds(data);
+      const {twoOnly,threeToFour,fiveOrMore}=getItemErrorGroups(data,"clickItemErrorCounts");
+      const errorDetails=[
+        twoOnly.length?`<div><span class="lowErrorMark">⚠ 答錯 1～2 次：${twoOnly.map(esc).join("、")}</span></div>`:"",
+        threeToFour.length?`<div><span class="errorCountMark">⚠ 答錯 3～4 次：${threeToFour.map(esc).join("、")}</span></div>`:"",
+        fiveOrMore.length?`<div><span class="fiveWrongMark">⚠ 答錯 5 次以上：${fiveOrMore.map(esc).join("、")}</span></div>`:""
+      ].filter(Boolean).join("");
       return `<div class="clickRecord">
         <b>${esc(data.studentName||("學生 "+(data.studentCode||"")))}</b>｜${resultStatusText(data.status)}｜答對 ${Number(data.clickCorrectCount||0)} 次｜答錯 ${Number(data.clickWrongCount||0)} 次｜逾時 ${Number(data.clickMissCount||0)} 次｜平均 ${averageSeconds?averageSeconds.toFixed(2):"—"} 秒
+        ${errorDetails?`<div class="clickRecordErrors">${errorDetails}</div>`:""}
       </div>`;
     }).join("");
     const resultSection=resultError
