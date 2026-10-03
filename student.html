@@ -3973,7 +3973,7 @@ function stopStudentVoiceControl(){
       trackedSpeechRecognitions.delete(recognition);
       resolve();
     };
-    const fallbackTimer=setTimeout(finish,900);
+    const fallbackTimer=setTimeout(finish,1400);
     if(recognition.addEventListener){
       recognition.addEventListener("audioend",finish,{once:true});
       recognition.addEventListener("end",finish,{once:true});
@@ -3984,8 +3984,16 @@ function stopStudentVoiceControl(){
     try{recognition.onerror=null}catch(e){}
     try{recognition.onend=null}catch(e){}
     stopSpeechRecognitionInstance(recognition);
+    [80,240,520].forEach(delay=>setTimeout(()=>stopSpeechRecognitionInstance(recognition),delay));
     if(!recognition.addEventListener)finish();
   });
+}
+
+async function releaseStudentVoiceControlMicrophone(){
+  await stopStudentVoiceControl();
+  stopTrackedMicrophoneTracks();
+  await new Promise(resolve=>setTimeout(resolve,420));
+  stopTrackedMicrophoneTracks();
 }
 
 function parseStudentVoiceNumber(transcript){
@@ -4010,7 +4018,7 @@ function handleStudentVoiceControlTranscript(stage,transcript){
     if((normalized.includes("開始")||normalized.includes("开始"))&&selectedStudentNumber&&!$("startBtn").disabled){
       primeStudentAudioPlayback();
       studentVoiceControlStage="";
-      setTimeout(()=>handleStartButtonClick(),0);
+      setTimeout(()=>handleStartButtonClick({fromVoiceControl:true}),0);
       return true;
     }
     return !!number;
@@ -4058,6 +4066,8 @@ function startStudentVoiceControlStage(stage){
     recognition.maxAlternatives=5;
     recognition.onstart=()=>{
       if(session!==studentVoiceControlSession)return stopSpeechRecognitionInstance(recognition);
+      browserSpeechPermissionPrimed=true;
+      chromiumSpeechPermissionPrimed=true;
       primeStudentAudioPlayback();
       if(!studentVoiceControlDeadline){
         studentVoiceControlDeadline=Date.now()+STUDENT_VOICE_CONTROL_WINDOW_MS;
@@ -6668,8 +6678,10 @@ function handleHanziSpeechButton(){
   return recognizeHanziSpeech();
 }
 
-async function handleStartButtonClick(){
-  await stopStudentVoiceControl();
+async function handleStartButtonClick(options={}){
+  const fromVoiceControl=options&&options.fromVoiceControl===true;
+  if(fromVoiceControl)await releaseStudentVoiceControlMicrophone();
+  else await stopStudentVoiceControl();
   setSelectionAttention(null);
   if(!primeSafariFirstQuestionSpeech())unlockPlatformSpeech();
   const needsMicrophone=taskUsesBrowserSpeechRecognition();
