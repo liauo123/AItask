@@ -3992,8 +3992,27 @@ function stopStudentVoiceControl(){
 async function releaseStudentVoiceControlMicrophone(){
   await stopStudentVoiceControl();
   stopTrackedMicrophoneTracks();
-  await new Promise(resolve=>setTimeout(resolve,420));
+  await new Promise(resolve=>setTimeout(resolve,isSafariBrowser()?1100:420));
   stopTrackedMicrophoneTracks();
+  if(isSafariBrowser()){
+    platformSpeechRequestId++;
+    platformSpeechLastText="";
+    platformSpeechLastAt=0;
+    platformSpeechLastPromise=null;
+    safariPrimedSpeechText="";
+    safariPrimedSpeechPromise=null;
+    safariFirstQuestionFullVolumePending=false;
+    if("speechSynthesis" in window){
+      try{window.speechSynthesis.cancel()}catch(e){}
+      await new Promise(resolve=>setTimeout(resolve,120));
+      try{window.speechSynthesis.resume()}catch(e){}
+      refreshPlatformSpeechVoice();
+    }
+    if(buttonSoundContext&&buttonSoundContext.state!=="closed"&&buttonSoundContext.state!=="running"){
+      try{await buttonSoundContext.resume()}catch(e){}
+    }
+    await new Promise(resolve=>setTimeout(resolve,180));
+  }
 }
 
 function parseStudentVoiceNumber(transcript){
@@ -6683,7 +6702,10 @@ async function handleStartButtonClick(options={}){
   if(fromVoiceControl)await releaseStudentVoiceControlMicrophone();
   else await stopStudentVoiceControl();
   setSelectionAttention(null);
-  if(!primeSafariFirstQuestionSpeech())unlockPlatformSpeech();
+  if(fromVoiceControl&&isSafariBrowser()){
+    safariFirstQuestionFullVolumePending=false;
+    unlockPlatformSpeech();
+  }else if(!primeSafariFirstQuestionSpeech())unlockPlatformSpeech();
   const needsMicrophone=taskUsesBrowserSpeechRecognition();
   const microphoneReady=await primeBrowserSpeechMicrophoneFromGesture();
   if(needsMicrophone&&!microphoneReady){
