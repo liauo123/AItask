@@ -2605,8 +2605,9 @@ async function loadTask(){
 
 
 function setSelectionAttention(target){
-  $("studentNumberGrid").classList.remove("selection-attention");
-  $("startBtn").classList.remove("start-attention");
+  const waitingForSafariMicrophone=!!(task?.studentFullVoiceControl&&isSafariBrowser()&&!safariStudentVoiceControlActivated);
+  $("studentNumberGrid").classList.toggle("selection-attention",!waitingForSafariMicrophone&&target==="number");
+  $("startBtn").classList.toggle("start-attention",!waitingForSafariMicrophone&&target==="start");
 }
 
 function selectStudentNumber(number){
