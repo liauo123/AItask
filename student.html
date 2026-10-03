@@ -161,7 +161,7 @@ body[data-mode-theme="reading"] #advancedPromptCard .target-question-row{flex-di
 .progress>div{height:100%;width:0;background:var(--success);transition:width .2s}
 .stage{position:relative;width:100%;aspect-ratio:1/1;overflow:hidden;border-radius:20px;background:#0f172a;display:grid;place-items:center}
 #imageVideo{width:100%;height:100%;object-fit:cover}
-#poseCanvas{width:100%;height:100%;object-fit:cover;display:block}
+
 .guide{position:absolute;inset:9%;border:3px dashed rgba(255,255,255,.8);border-radius:24px;pointer-events:none}
 .guide span{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);white-space:nowrap;background:rgba(15,23,42,.75);color:#fff;border-radius:999px;padding:8px 14px;font-size:.9rem}
 .audio-stage{min-height:280px;background:linear-gradient(145deg,#0f172a,#1e3a8a);color:#fff;border-radius:20px;display:grid;place-items:center;text-align:center;padding:25px}
@@ -379,8 +379,7 @@ html,body{
   max-height:calc(100vh - 250px);
   max-height:calc(100svh - 250px);
 }
-#imageVideo,
-#poseCanvas{
+#imageVideo{
   width:100%;
   height:100%;
   object-fit:cover;
@@ -699,13 +698,7 @@ body.safari-browser[data-mode-theme="reading"] .recognition-actions #voiceRecogn
       <div class="overlay"><div id="imageOverlay" class="overlay-main">等待相機畫面…</div></div>
     </div>
 
-    <div id="poseStage" class="stage hidden">
-      <canvas id="poseCanvas"></canvas>
-      <div class="guide"><span>請讓全身進入框內</span></div>
-      <div class="overlay"><div id="poseOverlay" class="overlay-main">等待姿勢畫面…</div></div>
-    </div>
-
-    <div id="audioStage" class="audio-stage hidden">
+<div id="audioStage" class="audio-stage hidden">
       <div>
         <div class="audio-icon">🎤</div>
         <h2>請發出指定聲音</h2>
@@ -863,9 +856,7 @@ const RUNTIME_SCRIPT_URLS={
   tensorflow:"https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js",
   coco:"https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js",
   tmImage:"https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js",
-  tmPose:"https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js",
   speechCommands:"https://cdn.jsdelivr.net/npm/@tensorflow-models/speech-commands@0.4.0/dist/speech-commands.min.js",
-  tesseract:"https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js",
   pinyin:"https://cdn.jsdelivr.net/npm/pinyin-pro@3.28.2/dist/index.min.js"
 };
 
@@ -889,6 +880,8 @@ function loadRuntimeScript(url,globalName,label){
       if(settled)return;
       settled=true;
       clearTimeout(timer);
+      script.onload=null;script.onerror=null;
+      if(!success)script.remove();
       if(success&&(!globalName||window[globalName]))resolve(true);
       else reject(error||new Error(`${label}載入失敗`));
     };
@@ -965,26 +958,19 @@ document.addEventListener("keydown",event=>{
 },{capture:true});
 
 let taskId="",task=null,projectType="",metadata=null,model=null;
-let ocrWorker=null,lastOcrText="",lastOcrConfidence=0;
 let browserSpeechRecognition=null,optionalAudioListening=false,optionalAudioStarting=false,optionalAudioTimer=null,optionalAudioStartWatchdog=null,optionalAudioSessionDeadline=0,optionalAudioResumeTimer=null;
 let resultRef=null,currentIndex=0,completed=[],attempts=0,holdCount=0,finished=false,paused=false;
 let imageStream=null;
-let poseWebcam=null,poseCtx=null,poseRaf=null,posePredicting=false,poseVideoStream=null,poseVideo=null;
 let audioListening=false,audioStarting=false,audioStopPromise=null,activeAudioRecognizer=null;
 let predictionRows={};
 
-const POSE_INTERVAL=210;             // 姿勢約 4.8 次/秒
-const POSE_STABLE_INTERVAL=320;      // 姿勢結果穩定後約 3.1 次/秒
 let pageAutoPaused=false;
 let pageBlurCheckTimer=null;
 let microphoneStartRequestedAt=0;
 let lastImageOverlayText="";
-let lastPoseOverlayText="";
 let lastTeachingClass="";
 let lastTeachingPercent=-1;
 let lastFlashedTeachingClass="";
-let poseStableClass="";
-let poseStableCount=0;
 let taskSuccessAnimating=false;
 let photoRecognizing=false;
 let selectedStudentNumber="";
@@ -1004,34 +990,139 @@ let imageItemErrorCounts={},audioItemErrorCounts={};
 let exitInProgress=false,exitMicrophoneShutdownPromise=null,backgroundMicrophoneShutdownPromise=Promise.resolve();
 let studentLeaveConfirmed=false;
 let studentPageMarkedLeft=false,studentPresenceWritePromise=Promise.resolve();
+// 每份作答紀錄分別暫存；Firebase 寫入不互相阻塞。
+const pendingResultPrefix="aitask-pending-result:v1:"+firebaseConfig.projectId+":";
+const pendingResultWrites=new Map();
+let pendingResultRevision=0;
+function pendingResultKey(path){return pendingResultPrefix+encodeURIComponent(path)}
+function setResultSyncNotice(message){
+  for(const [parentId,id] of [["hanziTaskCard","resultSyncNotice"],["completeCard","completionSyncNotice"]]){
+    const parent=document.getElementById(parentId);if(!parent)continue;
+    let notice=document.getElementById(id);
+    if(!notice){notice=document.createElement("div");notice.id=id;notice.className="status";notice.setAttribute("role","status");notice.setAttribute("aria-live","polite");parent.appendChild(notice)}
+    notice.textContent=message;
+    const retryId=id+"Retry";
+    let retry=document.getElementById(retryId);
+    if(!retry){retry=document.createElement("button");retry.id=retryId;retry.type="button";retry.textContent="重試回傳";retry.onclick=retryPendingStudentResults;parent.appendChild(retry)}
+    retry.classList.toggle("hidden",!resultRef||!pendingResultWrites.has(resultRef.path));
+  }
+}
+function serializeResultPatch(patch){
+  const copy={...patch};
+  for(const key of ["updatedAt","completedAt","startedAt"]){
+    if(copy[key])copy[key]={__aitaskTimestamp:true};
+  }
+  return JSON.parse(JSON.stringify(copy));
+}
+function reviveResultPatch(patch){
+  const copy={...patch};
+  for(const key of ["updatedAt","completedAt","startedAt"]){
+    if(copy[key]?.__aitaskTimestamp)copy[key]=firebase.firestore.FieldValue.serverTimestamp();
+  }
+  return copy;
+}
+function storePendingResult(record){
+  try{localStorage.setItem(pendingResultKey(record.path),JSON.stringify(record));return true}
+  catch(error){console.warn("作答紀錄本機暫存失敗",error);return false}
+}
+function restorePendingResultRecords(){
+  const records=[];
+  try{
+    for(let i=0;i<localStorage.length;i++){
+      const key=localStorage.key(i);if(!key?.startsWith(pendingResultPrefix))continue;
+      try{
+        const record=JSON.parse(localStorage.getItem(key));
+        if(record&&/^taskResults\/[^/]+$/.test(record.path)&&record.owner===auth.currentUser?.uid&&record.patch)records.push(record);
+      }catch(error){console.warn("略過無法讀取的待同步紀錄",error)}
+    }
+  }catch(error){console.warn("無法讀取本機待同步紀錄",error)}
+  return records;
+}
+function updateResultSyncNotice(){
+  if(!resultRef)return;
+  const record=pendingResultWrites.get(resultRef.path);
+  setResultSyncNotice(record?(record.durable?"結果已暫存，連線後會自動回傳；可繼續作答。":"結果回傳尚未完成，請保持頁面開啟。"):"結果已回傳教師端。");
+}
+function sendPendingResult(record){
+  const path=record.path;
+  // Firestore 本身保留本機寫入順序；不要讓前一次斷網等待擋住新紀錄。
+  const operation=db.doc(path).update(reviveResultPatch(record.patch));
+  operation.then(()=>{
+    if(pendingResultWrites.get(path)!==record)return;
+    pendingResultWrites.delete(path);
+    try{
+      const saved=JSON.parse(localStorage.getItem(pendingResultKey(path))||"null");
+      if(saved?.revision===record.revision)localStorage.removeItem(pendingResultKey(path));
+    }catch(error){console.warn("清除待同步紀錄失敗",error)}
+    if(resultRef?.path===path)updateResultSyncNotice();
+  },error=>{
+    console.warn("作答結果尚未同步",error);
+    if(resultRef?.path===path){
+      setResultSyncNotice(record.durable?"結果已暫存，回傳失敗；請確認連線後重試。":"結果回傳失敗，請保持頁面開啟並重試。");
+    }
+  });
+  return operation;
+}
+function persistStudentResultPatch(ref,patch){
+  const previous=pendingResultWrites.get(ref.path);
+  const record={path:ref.path,owner:auth.currentUser?.uid||"",revision:Date.now()+":"+(++pendingResultRevision),patch:{...(previous?.patch||{}),...serializeResultPatch(patch)}};
+  record.durable=storePendingResult(record);
+  pendingResultWrites.set(ref.path,record);
+  if(resultRef?.path===ref.path)updateResultSyncNotice();
+  return sendPendingResult(record);
+}
+function retryPendingStudentResults(){
+  if(!auth.currentUser)return;
+  for(const record of restorePendingResultRecords()){
+    if(!pendingResultWrites.has(record.path)){record.durable=true;pendingResultWrites.set(record.path,record)}
+  }
+  for(const record of pendingResultWrites.values()){
+    if(record.owner===auth.currentUser.uid)sendPendingResult(record).catch(()=>{});
+  }
+}
+window.addEventListener("online",retryPendingStudentResults);
 let queuedResultRef=null,queuedResultPatch=null,queuedResultTimer=null,queuedResultWaiters=[],studentResultWritePromise=Promise.resolve();
 function flushQueuedStudentResultWrite(){
   if(queuedResultTimer){clearTimeout(queuedResultTimer);queuedResultTimer=null}
   if(!queuedResultRef||!queuedResultPatch)return studentResultWritePromise;
-  const ref=queuedResultRef;
-  const patch=queuedResultPatch;
-  const waiters=queuedResultWaiters.splice(0);
+  const ref=queuedResultRef,patch=queuedResultPatch,waiters=queuedResultWaiters.splice(0);
   queuedResultRef=null;queuedResultPatch=null;
-  studentResultWritePromise=studentResultWritePromise.catch(()=>{}).then(()=>ref.update(patch));
-  studentResultWritePromise.then(
-    value=>waiters.forEach(waiter=>waiter.resolve(value)),
-    error=>waiters.forEach(waiter=>waiter.reject(error))
-  );
+  studentResultWritePromise=persistStudentResultPatch(ref,patch);
+  studentResultWritePromise.then(value=>waiters.forEach(waiter=>waiter.resolve(value)),error=>waiters.forEach(waiter=>waiter.reject(error)));
   return studentResultWritePromise;
 }
 function queueStudentResultWrite(patch,delay=350){
   if(!resultRef)return Promise.resolve();
   if(queuedResultRef&&queuedResultRef!==resultRef)flushQueuedStudentResultWrite();
-  queuedResultRef=resultRef;
-  queuedResultPatch={...(queuedResultPatch||{}),...patch};
+  queuedResultRef=resultRef;queuedResultPatch={...(queuedResultPatch||{}),...patch};
+  // 計時合併之前即暫存，避免背景關閉頁面時遺失最後一次作答。
+  const previous=pendingResultWrites.get(resultRef.path);
+  const record={path:resultRef.path,owner:auth.currentUser?.uid||"",revision:Date.now()+":"+(++pendingResultRevision),patch:{...(previous?.patch||{}),...serializeResultPatch(queuedResultPatch)}};
+  record.durable=storePendingResult(record);pendingResultWrites.set(record.path,record);updateResultSyncNotice();
   if(queuedResultTimer)clearTimeout(queuedResultTimer);
   queuedResultTimer=setTimeout(flushQueuedStudentResultWrite,delay);
   return new Promise((resolve,reject)=>queuedResultWaiters.push({resolve,reject}));
 }
+// 重試開始測驗時沿用尚未確認的紀錄 ID，不重複建立。
+const startingResultRecords=new Map();
+async function createStudentResultRecord(data){
+  const key=data.taskId+":"+data.studentUid+":"+data.studentCode;
+  let entry=startingResultRecords.get(key);
+  if(!entry){
+    const ref=db.collection("taskResults").doc();
+    entry={ref,promise:ref.set(data)};startingResultRecords.set(key,entry);
+    entry.promise.catch(error=>{if(startingResultRecords.get(key)===entry)startingResultRecords.delete(key)});
+  }
+  await waitWithTimeout(entry.promise,12000,"建立作答紀錄逾時，請確認連線後再次按開始。");
+  if(startingResultRecords.get(key)===entry)startingResultRecords.delete(key);
+  return entry.ref;
+}
+
 let clickSequence=[],clickTrialIndex=0,clickRecords=[],clickWrongCount=0,clickItemErrorCounts={},clickTrialTimer=null,clickNextTimer=null,clickShownAt=0,clickTrialActive=false,clickCurrentTarget="",clickCurrentChoices=[];
 let hanziSpeechRecognition=null,hanziSpeechStarting=false,hanziSpeechStartWatchdog=null,hanziSpeechInputTimer=null,hanziSpeechSessionDeadline=0,hanziSpeechResumeTimer=null;
 let hanziPracticeItems=[],hanziPracticeTrigger=null;
-let hanziWriterLoadPromise=null,hanziWriterInstance=null,hanziWriterSession=0,hanziStrokeTarget="",hanziStrokeStartedAt=0,hanziStrokeMistakeCount=0,hanziStrokeHintUsed=false,hanziStrokeRecords=[];
+let hanziKeyboardRecords=[],hanziSkippedClasses=[];
+let hanziWriterInstance=null,hanziWriterSession=0,hanziStrokeTarget="",hanziStrokeStartedAt=0,hanziStrokeMistakeCount=0,hanziStrokeHintUsed=false,hanziStrokeRecords=[];
 let studentVoiceControlRecognition=null,studentVoiceControlTimer=null,studentVoiceControlRestartTimer=null,studentVoiceControlDeadline=0,studentVoiceControlStage="",studentVoiceControlSession=0;
 let safariStudentVoiceControlActivated=false;
 const STUDENT_VOICE_CONTROL_JOIN_WINDOW_MS=30000;
@@ -1325,7 +1416,7 @@ async function primeChromiumSpeechMicrophone(){
   const mediaDevices=navigator.mediaDevices;
   try{
     if(!mediaDevices||typeof mediaDevices.getUserMedia!=="function")return false;
-    const stream=await mediaDevices.getUserMedia({
+    const stream=await requestStudentMediaStream({
       audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},
       video:false
     });
@@ -1351,7 +1442,7 @@ async function primeBrowserSpeechMicrophoneFromGesture(){
   const mediaDevices=navigator.mediaDevices;
   if(!mediaDevices||typeof mediaDevices.getUserMedia!=="function")return false;
   try{
-    const stream=await mediaDevices.getUserMedia({
+    const stream=await requestStudentMediaStream({
       audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},
       video:false
     });
@@ -1405,7 +1496,6 @@ function detachStudentMediaElement(element){
 
 function releaseStudentMediaForIPhone(){
   const mediaElements=new Set(document.querySelectorAll("video,audio"));
-  if(poseVideo)mediaElements.add(poseVideo);
   mediaElements.forEach(detachStudentMediaElement);
   stopTrackedCameraTracks();
   stopTrackedMicrophoneTracks();
@@ -1536,8 +1626,9 @@ function playTaskErrorSound(){
 function norm(url){url=(url||"").trim();return url.endsWith("/")?url:url+"/"}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 async function ensureAuth(){
-  if(auth.currentUser)return auth.currentUser;
+  if(auth.currentUser){retryPendingStudentResults();return auth.currentUser;}
   const credential=await waitWithTimeout(auth.signInAnonymously(),12000,"登入服務回應逾時，請檢查網路後重試。");
+  retryPendingStudentResults();
   return credential.user;
 }
 
@@ -1556,19 +1647,12 @@ async function ensureTaskRuntimeLibraries(){
     await loadRuntimeScript(RUNTIME_SCRIPT_URLS.pinyin,"pinyinPro","中文語音比對元件");
   }
   if(isClickMode()||isHanziMode()||isSpeechOnlyRecognition())return;
-  if(task.recognitionEngine==="ocr"){
-    setStatus("loadStatus","正在載入文字辨識元件…");
-    await loadRuntimeScript(RUNTIME_SCRIPT_URLS.tesseract,"Tesseract","文字辨識元件");
-    return;
-  }
   setStatus("loadStatus","正在載入此任務需要的辨識元件…");
   await loadRuntimeScript(RUNTIME_SCRIPT_URLS.tensorflow,"tf","TensorFlow 元件");
   if(task.recognitionEngine==="coco-ssd"){
     await loadRuntimeScript(RUNTIME_SCRIPT_URLS.coco,"cocoSsd","COCO-SSD 元件");
   }else if(projectType==="image"){
     await loadRuntimeScript(RUNTIME_SCRIPT_URLS.tmImage,"tmImage","圖片辨識元件");
-  }else if(projectType==="pose"){
-    await loadRuntimeScript(RUNTIME_SCRIPT_URLS.tmPose,"tmPose","姿勢辨識元件");
   }else if(projectType==="audio"){
     await loadRuntimeScript(RUNTIME_SCRIPT_URLS.speechCommands,"speechCommands","音訊辨識元件");
   }
@@ -1576,18 +1660,18 @@ async function ensureTaskRuntimeLibraries(){
 function isCocoRecognition(){
   return !!(task&&task.recognitionEngine==="coco-ssd");
 }
-function isOcrRecognition(){
-  return !!(task&&task.recognitionEngine==="ocr");
+function isTextTask(){
+  return !!(task&&task.recognitionEngine==="text");
 }
 function sortPredictionsForDecision(predictions){
   const sorted=[...predictions].sort((a,b)=>b.probability-a.probability);
-  if((!isCocoRecognition()&&!isOcrRecognition())||isTeachingMode())return sorted;
+  if((!isCocoRecognition()&&!isTextTask())||isTeachingMode())return sorted;
   const target=currentTarget();
   const match=sorted.find(item=>item.className===target);
   return match?[match,...sorted.filter(item=>item!==match)]:sorted;
 }
 function hasRecognitionMargin(top,second){
-  if(isCocoRecognition()||isOcrRecognition())return true;
+  if(isCocoRecognition()||isTextTask())return true;
   return ((top?.probability||0)-(second?.probability||0))>=0.10;
 }
 
@@ -1628,7 +1712,7 @@ function isEvaluationMode(){
 }
 
 function isSpeechOnlyRecognition(){
-  return !!(task&&task.skipPhotoRecognition&&(isReadingMode()||isGameMode()||(task.recognitionEngine==="ocr"&&isEvaluationMode())));
+  return !!(task&&task.skipPhotoRecognition&&(isReadingMode()||isGameMode()||(task.recognitionEngine==="text"&&isEvaluationMode())));
 }
 
 function applyTaskModeTheme(mode){
@@ -1674,7 +1758,7 @@ function isDescriptionPromptMode(){
 
 function shouldShowTargetThumbnail(){
   if(!task||!(isGameMode()||isEvaluationMode()))return false;
-  if(isOcrRecognition())return !!task.showThumbnailHint;
+  if(isTextTask())return !!task.showThumbnailHint;
   return task.showThumbnailHint===undefined?true:!!task.showThumbnailHint;
 }
 
@@ -2315,13 +2399,13 @@ async function detectProjectType(modelURL){
   const data=await response.json();
   const text=JSON.stringify(data).toLowerCase();
 
-  if(text.includes("@teachablemachine/pose") || text.includes('"pose"')) return {type:"pose",metadata:data};
+  if(text.includes("@teachablemachine/pose") || text.includes('"pose"')) throw new Error("姿勢辨識功能已移除，請使用其他任務。");
   if(text.includes("@teachablemachine/audio") || text.includes('"audio"') || text.includes("speechcommands")) return {type:"audio",metadata:data};
   if(text.includes("@teachablemachine/image") || text.includes('"image"')) return {type:"image",metadata:data};
 
   // 舊版 metadata 常沒有明確 type，以欄位特徵判斷
   if(data.wordLabels || data.backgroundNoise || data.sampleRate) return {type:"audio",metadata:data};
-  if(data.poseModel || data.poseLabels) return {type:"pose",metadata:data};
+  if(data.poseModel || data.poseLabels) throw new Error("姿勢辨識功能已移除，請使用其他任務。");
   return {type:"image",metadata:data};
 }
 
@@ -2355,7 +2439,9 @@ async function loadTask(){
     }
     task.studentFullVoiceControl=!!task.studentFullVoiceControl&&["speaking","reading","game"].includes(task.taskMode);
     applyTaskModeTheme(task.taskMode);
-    task.recognitionEngine=["coco-ssd","ocr"].includes(task.recognitionEngine)
+    // 舊版文字題目使用 ocr 標記；保留其非拍照作答流程。
+    if(task.recognitionEngine==="ocr")task.recognitionEngine="text";
+    task.recognitionEngine=["coco-ssd","text"].includes(task.recognitionEngine)
       ? task.recognitionEngine
       : "teachable-machine";
     if(!isClickMode()&&!isHanziMode()&&task.recognitionEngine==="teachable-machine"&&!task.modelURL)throw new Error("任務沒有模型網址");
@@ -2376,11 +2462,11 @@ async function loadTask(){
       : [];
     task.skipPhotoRecognition=isReadingMode()||isGameMode()
       ? true
-      : task.recognitionEngine==="ocr"&&isEvaluationMode()&&!!task.skipPhotoRecognition;
+      : task.recognitionEngine==="text"&&isEvaluationMode()&&!!task.skipPhotoRecognition;
     if(task.skipPhotoRecognition)task.audioRequiredClasses=[...task.targetClasses];
     task.promptMode=task.promptMode==="description"?"description":"name";
-    task.showNameText=task.recognitionEngine==="ocr"&&!!task.showNameText;
-    task.showThumbnailHint=task.recognitionEngine==="ocr"
+    task.showNameText=task.recognitionEngine==="text"&&!!task.showNameText;
+    task.showThumbnailHint=task.recognitionEngine==="text"
       ? !!task.showThumbnailHint
       : task.showThumbnailHint===undefined?true:!!task.showThumbnailHint;
     task.speechRecognitionMode="browser";
@@ -2440,7 +2526,7 @@ async function loadTask(){
     }else if(isSpeechOnlyRecognition()){
       projectType="image";
       metadata={labels:[...task.targetClasses]};
-    }else if(task.recognitionEngine==="coco-ssd"||task.recognitionEngine==="ocr"){
+    }else if(task.recognitionEngine==="coco-ssd"||task.recognitionEngine==="text"){
       projectType="image";
       metadata={labels:[...task.targetClasses]};
     }else{
@@ -2448,13 +2534,16 @@ async function loadTask(){
       projectType=detected.type;
       metadata=detected.metadata;
     }
+    if(task.recognitionEngine==="text"&&!isClickMode()&&!isHanziMode()&&!isSpeechOnlyRecognition()){
+      throw new Error("此任務使用的拍照文字辨識已移除，請向教師索取點選、口語、問答或書寫任務。");
+    }
     await ensureTaskRuntimeLibraries();
 
     const typeName=isSpeakingMode()?"口語模式":isHanziMode()?"書寫模式":isClickMode()?"點選模式":task.recognitionEngine==="coco-ssd"
       ?"COCO-SSD 開放辨識"
-      :task.recognitionEngine==="ocr"
-        ?"OCR 文字辨識"
-        :{image:"圖片專案",audio:"音訊專案",pose:"姿勢專案"}[projectType];
+      :task.recognitionEngine==="text"
+        ?"文字題目"
+        :{image:"圖片專案",audio:"音訊專案"}[projectType];
     $("taskTitle").textContent=task.title||"未命名任務";
     const effectiveAudioRequiredClasses=getEffectiveAudioRequiredClasses();
     const audioNote=effectiveAudioRequiredClasses.length
@@ -2864,7 +2953,7 @@ function closeHanziPractice(restoreFocus=true){
 
 function disableHanziCamera(){
   stopAll();
-  ["imageStage","poseStage","audioStage","taskCard","clickTaskCard"].forEach(id=>$(id)?.classList.add("hidden"));
+  ["imageStage","audioStage","taskCard","clickTaskCard"].forEach(id=>$(id)?.classList.add("hidden"));
 }
 
 function isSingleHanziWritingTarget(value){
@@ -2872,27 +2961,7 @@ function isSingleHanziWritingTarget(value){
 }
 
 function loadHanziWriterForAssessment(){
-  if(window.HanziWriter)return Promise.resolve(window.HanziWriter);
-  if(hanziWriterLoadPromise)return hanziWriterLoadPromise;
-  hanziWriterLoadPromise=new Promise((resolve,reject)=>{
-    const existing=document.querySelector('script[data-hanzi-writer-assessment="true"]');
-    const script=existing||document.createElement("script");
-    const finish=()=>window.HanziWriter?resolve(window.HanziWriter):reject(new Error("Hanzi Writer 載入失敗"));
-    script.addEventListener("load",finish,{once:true});
-    script.addEventListener("error",()=>{script.remove();reject(new Error("逐筆書寫元件載入失敗"))},{once:true});
-    if(!existing){
-      script.src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.5/dist/hanzi-writer.min.js";
-      script.async=true;
-      script.dataset.hanziWriterAssessment="true";
-      document.head.appendChild(script);
-    }else if(window.HanziWriter){
-      finish();
-    }
-  }).catch(error=>{
-    hanziWriterLoadPromise=null;
-    throw error;
-  });
-  return hanziWriterLoadPromise;
+  return loadRuntimeScript("https://cdn.jsdelivr.net/npm/hanzi-writer@3.5/dist/hanzi-writer.min.js","HanziWriter","逐筆書寫元件").then(()=>window.HanziWriter);
 }
 
 function disposeHanziStrokeAssessment(){
@@ -2915,6 +2984,18 @@ function showHanziKeyboardFallback(message){
   input.disabled=false;
   $("submitHanziWritingBtn").disabled=false;
   setStatus("hanziStatus",message||"此文字暫無逐筆書寫資料，請使用設備手寫鍵盤輸入。","error");
+  let retry=document.getElementById("retryHanziStrokeBtn");
+  if(!retry){
+    retry=document.createElement("button");retry.id="retryHanziStrokeBtn";retry.type="button";retry.textContent="重試逐筆書寫";
+    retry.onclick=()=>{
+      const current=String(task?.targetClasses?.[currentIndex]||"");
+      if(!isSingleHanziWritingTarget(current))return;
+      $("hanziWritingPanel").classList.add("hidden");$("hanziStrokePanel").classList.remove("hidden");
+      initHanziStrokeAssessment(current,true);
+    };
+    $("hanziWritingPanel").appendChild(retry);
+  }
+  retry.classList.toggle("hidden",!isSingleHanziWritingTarget(task?.targetClasses?.[currentIndex]));
   setTimeout(()=>input.focus(),120);
 }
 
@@ -2923,6 +3004,19 @@ function getHanziStrokeWriterSize(){
   const measured=Math.floor(grid&&grid.getBoundingClientRect().width||0);
   return Math.max(180,Math.min(420,measured||Math.max(180,Math.min(360,window.innerWidth-64))));
 }
+
+let hanziResizeTimer=null;
+function scheduleHanziWriterResize(){
+  clearTimeout(hanziResizeTimer);
+  hanziResizeTimer=setTimeout(()=>{
+    if(!hanziWriterInstance||$("hanziStrokePanel").classList.contains("hidden"))return;
+    const size=getHanziStrokeWriterSize();
+    if(typeof hanziWriterInstance.updateDimensions==="function")hanziWriterInstance.updateDimensions({width:size,height:size,padding:14});
+  },180);
+}
+window.addEventListener("resize",scheduleHanziWriterResize);
+window.addEventListener("orientationchange",scheduleHanziWriterResize);
+if(typeof ResizeObserver!=="undefined")new ResizeObserver(scheduleHanziWriterResize).observe($("hanziStrokeGrid"));
 
 function queueHanziStrokeMistake(target){
   if(!resultRef)return;
@@ -3019,6 +3113,17 @@ async function initHanziStrokeAssessment(target,preserveCurrent=false){
       highlightColor:"#2563eb",
       strokeAnimationSpeed:1,
       delayBetweenStrokes:180,
+      charDataLoader:(char,onComplete,onError)=>{
+        const controller=typeof AbortController!=="undefined"?new AbortController():null;
+        const timer=setTimeout(()=>{if(controller)controller.abort()},12000);
+        const request=fetch("https://cdn.jsdelivr.net/npm/hanzi-writer-data@2.0/"+encodeURIComponent(char)+".json",controller?{signal:controller.signal}:{}).then(response=>{
+          if(!response.ok)throw new Error("筆畫資料讀取失敗");
+          return response.json();
+        });
+        waitWithTimeout(request,12000,"筆畫資料讀取逾時").then(data=>{
+          if(session===hanziWriterSession)onComplete(data);
+        }).catch(error=>{if(session===hanziWriterSession)onError(error)}).finally(()=>clearTimeout(timer));
+      },
       onLoadCharDataSuccess:()=>{
         if(session!==hanziWriterSession)return;
         $("showHanziStrokeHintBtn").disabled=false;
@@ -3028,7 +3133,7 @@ async function initHanziStrokeAssessment(target,preserveCurrent=false){
         startHanziStrokeQuiz(text,session);
       },
       onLoadCharDataError:()=>{
-        if(session===hanziWriterSession)showHanziKeyboardFallback("此字暫無逐筆書寫資料，請使用設備手寫鍵盤輸入。");
+        if(session===hanziWriterSession)showHanziKeyboardFallback("筆畫資料無法載入或逾時，已改用設備手寫鍵盤輸入。");
       }
     });
   }catch(error){
@@ -3140,6 +3245,7 @@ async function submitHanziWritingAnswer(){
   input.disabled=true;
   button.disabled=true;
   const target=String(task.targetClasses[currentIndex]||"");
+  hanziKeyboardRecords.push({target,input:entered,correct:normalizeSpeechText(entered)===normalizeSpeechText(target)});
   attempts++;
   if(normalizeSpeechText(entered)!==normalizeSpeechText(target)){
     localIncorrectClasses.push(target);
@@ -3150,16 +3256,16 @@ async function submitHanziWritingAnswer(){
     showCaptureFeedback("failure","再寫一次",1500);
     if(resultRef){
       try{
-        await resultRef.update({
+        queueStudentResultWrite({
           attempts,
           errorCount:totalErrorCount,
           itemErrorCounts:{...itemErrorCounts},
           imageItemErrorCounts:{...imageItemErrorCounts},
           audioItemErrorCounts:{...audioItemErrorCounts},
-          incorrectClasses:firebase.firestore.FieldValue.arrayUnion(target),
-          writingInputRecords:firebase.firestore.FieldValue.arrayUnion({target,input:entered,correct:false}),
+          incorrectClasses:[...new Set(localIncorrectClasses)],
+          writingInputRecords:[...hanziKeyboardRecords],
           updatedAt:firebase.firestore.FieldValue.serverTimestamp()
-        });
+        }).catch(error=>console.warn("書寫錯誤尚未同步",error));
       }catch(e){console.warn("書寫錯誤紀錄失敗",e)}
     }
     setStatus("hanziStatus",`書寫不正確，請再試一次（已答錯 ${consecutiveWrongAttempts} 次）。`,"error");
@@ -3178,7 +3284,7 @@ async function saveHanziProgress(done=false){
   if(!resultRef||studentLeaveConfirmed||exitInProgress||pageAutoPaused)return;
   await queueStudentResultWrite({
     completedClasses:[...completed],incorrectClasses:[...new Set(localIncorrectClasses)],incorrectAudioClasses:[...new Set(localIncorrectAudioClasses)],
-    strokeWritingRecords:[...hanziStrokeRecords],writingAssessmentType:isSpeakingMode()?"speech":"strokeOrder",
+    writingInputRecords:[...hanziKeyboardRecords],skippedClasses:[...new Set(hanziSkippedClasses)],strokeWritingRecords:[...hanziStrokeRecords],writingAssessmentType:isSpeakingMode()?"speech":"strokeOrder",
     progress:Math.round(completed.length/task.targetClasses.length*100),attempts,errorCount:totalErrorCount,itemErrorCounts:{...itemErrorCounts},imageItemErrorCounts:{...imageItemErrorCounts},audioItemErrorCounts:{...audioItemErrorCounts},status:done?"completed":"inProgress",
     updatedAt:firebase.firestore.FieldValue.serverTimestamp(),...(done?{completedAt:firebase.firestore.FieldValue.serverTimestamp()}:{})
   });
@@ -3189,18 +3295,17 @@ async function completeHanziCharacter(skipped=false){
   disposeHanziStrokeAssessment();
   if(skipped&&resultRef){
     try{
-      await resultRef.update({
-        skippedClasses:firebase.firestore.FieldValue.arrayUnion(target),
-        updatedAt:firebase.firestore.FieldValue.serverTimestamp()
-      });
+      hanziSkippedClasses.push(target);
+      const previous=hanziSkippedClasses;
+      queueStudentResultWrite({skippedClasses:[...new Set([...previous,target])],updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).catch(error=>console.warn("跳題結果尚未同步",error));
     }catch(e){console.warn("國字跳題紀錄失敗",e)}
   }
   consecutiveWrongAttempts=0;
   completed.push(target);currentIndex++;
-  await saveHanziProgress(currentIndex>=task.targetClasses.length);
+  saveHanziProgress(currentIndex>=task.targetClasses.length).catch(error=>console.warn("書寫結果尚未同步",error));
   if(currentIndex>=task.targetClasses.length){
     finished=true;$("hanziTaskCard").classList.add("hidden");$("completeCard").classList.remove("hidden");$("completeActions").classList.remove("hidden");
-    $("completeIcon").textContent="🎉";$("completeTitle").textContent=isSpeakingMode()?"口語模式完成！":"書寫模式完成！";$("rankDisplay").classList.add("hidden");$("completeMessage").textContent=isSpeakingMode()?"已完成全部口語練習，結果已回傳教師端。":"已完成全部書寫練習，結果已回傳教師端。";renderIncorrectSummary();showCompletionCelebration();if(isSpeakingMode()){stopHanziSpeechRecognition(hanziSpeechRecognition,true);startStudentVoiceControlStage("finish")}return;
+    $("completeIcon").textContent="🎉";$("completeTitle").textContent=isSpeakingMode()?"口語模式完成！":"書寫模式完成！";$("rankDisplay").classList.add("hidden");$("completeMessage").textContent=isSpeakingMode()?"已完成全部口語練習。":"已完成全部書寫練習。";renderIncorrectSummary();showCompletionCelebration();if(isSpeakingMode()){stopHanziSpeechRecognition(hanziSpeechRecognition,true);startStudentVoiceControlStage("finish")}return;
   }
   renderHanziQuestion();
 }
@@ -3499,10 +3604,10 @@ async function startHanziTest(){
     disableHanziCamera();
     if(isSpeakingMode())await primeChromiumSpeechMicrophone();
     const currentUser=await ensureAuth();
-    resultRef=await db.collection("taskResults").add({taskId,teacherId:task.teacherId||"",studentUid:currentUser.uid,studentName:"學生 "+selectedStudentNumber,studentCode:selectedStudentNumber,projectType:"hanzi",targetClasses:[...task.targetClasses],hanziRepeatCount:task.hanziRepeatCount,completedClasses:[],incorrectClasses:[],incorrectAudioClasses:[],writingInputRecords:[],strokeWritingRecords:[],writingAssessmentType:isSpeakingMode()?"speech":"strokeOrder",speechInputRecords:[],progress:0,attempts:0,errorCount:0,itemErrorCounts:{},imageItemErrorCounts:{},audioItemErrorCounts:{},status:"inProgress",taskMode:task.taskMode||"hanzi",startedAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+    resultRef=await createStudentResultRecord({taskId,teacherId:task.teacherId||"",studentUid:currentUser.uid,studentName:"學生 "+selectedStudentNumber,studentCode:selectedStudentNumber,projectType:"hanzi",targetClasses:[...task.targetClasses],hanziRepeatCount:task.hanziRepeatCount,completedClasses:[],incorrectClasses:[],incorrectAudioClasses:[],writingInputRecords:[],strokeWritingRecords:[],writingAssessmentType:isSpeakingMode()?"speech":"strokeOrder",speechInputRecords:[],progress:0,attempts:0,errorCount:0,itemErrorCounts:{},imageItemErrorCounts:{},audioItemErrorCounts:{},status:"inProgress",taskMode:task.taskMode||"hanzi",startedAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
     stopHanziSpeechRecognition(hanziSpeechRecognition,true);
     studentPageMarkedLeft=false;
-    currentIndex=0;completed=[];attempts=0;totalErrorCount=0;itemErrorCounts={};imageItemErrorCounts={};audioItemErrorCounts={};hanziStrokeRecords=[];finished=false;paused=false;pageAutoPaused=false;localIncorrectClasses=[];localIncorrectAudioClasses=[];consecutiveWrongAttempts=0;
+    currentIndex=0;completed=[];attempts=0;totalErrorCount=0;itemErrorCounts={};imageItemErrorCounts={};audioItemErrorCounts={};hanziStrokeRecords=[];hanziSkippedClasses=[];hanziKeyboardRecords=[];finished=false;paused=false;pageAutoPaused=false;localIncorrectClasses=[];localIncorrectAudioClasses=[];consecutiveWrongAttempts=0;
     $("speakHanziBtn").disabled=false;
     $("loadCard").classList.add("hidden");$("joinCard").classList.add("hidden");$("hanziTaskCard").classList.remove("hidden");$("hanziTaskCard").classList.toggle("hanzi-assessment-active",!isSpeakingMode());$("hanziPicker").classList.add("hidden");$("hanziTestPanel").classList.remove("hidden");
     $("hanziCopyrightNotice").classList.add("hidden");
@@ -3553,7 +3658,7 @@ async function startTask(){
     if(missing.length)throw new Error("模型缺少類別："+missing.join("、"));
 
     if(!isTeachingMode()){
-      resultRef=await db.collection("taskResults").add({
+      resultRef=await createStudentResultRecord({
         taskId,
         teacherId:task.teacherId||"",
         studentUid:auth.currentUser.uid,
@@ -3842,7 +3947,7 @@ async function showNextClickTrial(resumeRound=false){
     clickCurrentChoices=shuffleClickSequence([clickCurrentTarget,...distractors]);
   }
   $("clickWaiting").classList.add("hidden");
-  const useTextChoices=task.recognitionEngine==="ocr";
+  const useTextChoices=task.recognitionEngine==="text";
   const promptThumbnail=String(task.classThumbnails?.[clickCurrentTarget]||"");
   const hasPromptThumbnail=/^data:image\/jpeg;base64,/i.test(promptThumbnail);
   const useDescriptionPrompt=task.promptMode==="description";
@@ -3911,7 +4016,7 @@ async function startClickMode(){
   setStatus("joinStatus","正在建立點選測驗紀錄…");
   try{
     const currentUser=await ensureAuth();
-    resultRef=await db.collection("taskResults").add({
+    resultRef=await createStudentResultRecord({
       taskId,
       teacherId:task.teacherId||"",
       studentUid:currentUser.uid,
@@ -3991,72 +4096,32 @@ $("clickTargets").addEventListener("click",event=>{
   finishClickRound(false,speechFinished);
 });
 
+let selectedModelLoadSession=0;
+function disposeStudentModel(value){
+  try{if(value&&typeof value.dispose==="function")value.dispose()}catch(error){console.warn("釋放模型失敗",error)}
+}
 async function loadSelectedModel(){
+  const session=++selectedModelLoadSession;
+  let abandoned=false;
+  const prepared=prepareSelectedModel().then(value=>{
+    if(abandoned||session!==selectedModelLoadSession){disposeStudentModel(value);throw new Error("模型載入已取消，請重試。")}
+    return value;
+  });
+  try{
+    const loaded=await waitWithTimeout(prepared,30000,"模型載入逾時，請確認連線後再次按開始。");
+    model=loaded;if(projectType==="audio")activeAudioRecognizer=loaded;
+  }catch(error){abandoned=true;throw error}
+}
+
+async function prepareSelectedModel(){
+  let model=null;
   if(isSpeechOnlyRecognition()){
     const supportedLabels=[...task.targetClasses];
     model={
       getClassLabels:()=>[...supportedLabels],
       predict:async()=>supportedLabels.map(className=>({className,probability:0}))
     };
-    return;
-  }
-  if(task.recognitionEngine==="ocr"){
-    if(typeof Tesseract==="undefined"){
-      throw new Error("OCR 文字辨識套件載入失敗，請確認網路連線後重新整理頁面。");
-    }
-    if(!ocrWorker){
-      const languages=Array.isArray(task.ocrLanguages)&&task.ocrLanguages.length
-        ? task.ocrLanguages
-        : ["chi_tra","eng"];
-      ocrWorker=await Tesseract.createWorker(languages,1,{
-        logger:message=>{
-          if(message.status!=="recognizing text")return;
-          const percent=Math.round(Number(message.progress||0)*100);
-          if(photoRecognizing&&$("imageOverlay")){
-            $("imageOverlay").textContent="正在辨識文字："+percent+"%";
-            return;
-          }
-          const targetId=$("gameWaitingCard")&&!$("gameWaitingCard").classList.contains("hidden")
-            ? "gameWaitingStatus"
-            : $("joinCard")&&!$("joinCard").classList.contains("hidden")
-              ? "joinStatus"
-              : "loadStatus";
-          setStatus(targetId,"正在準備 OCR 文字辨識："+percent+"%");
-        }
-      });
-      try{
-        await ocrWorker.setParameters({
-          tessedit_pageseg_mode:"11",
-          preserve_interword_spaces:"1",
-          user_defined_dpi:"300"
-        });
-      }catch(error){
-        console.warn("OCR 進階參數無法套用，改用預設設定",error);
-      }
-    }
-    const supportedLabels=[...task.targetClasses];
-    model={
-      getClassLabels:()=>[...supportedLabels],
-      predict:async input=>{
-        const enhanced=createEnhancedOcrCanvas(input);
-        const first=await ocrWorker.recognize(enhanced);
-        let combinedText=String(first?.data?.text||"");
-        let confidence=Number(first?.data?.confidence||0);
-        let predictions=buildOcrPredictions(combinedText,supportedLabels);
-
-        if(!predictions.some(item=>item.probability>0)){
-          const second=await ocrWorker.recognize(input);
-          combinedText+="\n"+String(second?.data?.text||"");
-          confidence=Math.max(confidence,Number(second?.data?.confidence||0));
-          predictions=buildOcrPredictions(combinedText,supportedLabels);
-        }
-
-        lastOcrText=combinedText.trim();
-        lastOcrConfidence=Math.max(0,Math.min(1,confidence/100));
-        return predictions;
-      }
-    };
-    return;
+    return model;
   }
   if(task.recognitionEngine==="coco-ssd"){
     if(typeof cocoSsd==="undefined"){
@@ -4073,6 +4138,7 @@ async function loadSelectedModel(){
       ? Object.keys(classMap)
       : [...task.targetClasses];
     model={
+      dispose:()=>baseModel.dispose?.(),
       getClassLabels:()=>[...supportedLabels],
       predict:async input=>{
         const detections=await baseModel.detect(input,20,0.01);
@@ -4087,7 +4153,7 @@ async function loadSelectedModel(){
         }));
       }
     };
-    return;
+    return model;
   }
   if((["teaching","advanced","game"].includes(task.taskMode))&&projectType!=="image"){
     throw new Error("目前教學模式、進階評量與多人回答模式僅支援 Teachable Machine 圖片專案。");
@@ -4095,64 +4161,13 @@ async function loadSelectedModel(){
 
   if(projectType==="image"){
     model=await tmImage.load(task.modelURL+"model.json",task.modelURL+"metadata.json");
-  }else if(projectType==="pose"){
-    model=await tmPose.load(task.modelURL+"model.json",task.modelURL+"metadata.json");
   }else if(projectType==="audio"){
     model=await createAudioRecognizer(task.modelURL);
-    activeAudioRecognizer=model;
+
   }else{
     throw new Error("不支援的專案類型");
   }
-}
-
-function normalizeOcrText(value){
-  const variants={
-    "发":"髮","髪":"髮","台":"臺","体":"體","门":"門","车":"車",
-    "头":"頭","后":"後","里":"裡","裏":"裡","药":"藥","饮":"飲",
-    "净":"淨","洁":"潔","护":"護","肤":"膚","齿":"齒","盐":"鹽"
-  };
-  const normalized=String(value||"").normalize("NFKC").toLowerCase().replace(/[\s\p{P}\p{S}]/gu,"");
-  return [...normalized].map(character=>variants[character]||character).join("");
-}
-
-function createEnhancedOcrCanvas(sourceCanvas){
-  const canvas=document.createElement("canvas");
-  canvas.width=sourceCanvas.width;
-  canvas.height=sourceCanvas.height;
-  const ctx=canvas.getContext("2d",{willReadFrequently:true});
-  ctx.drawImage(sourceCanvas,0,0);
-  const image=ctx.getImageData(0,0,canvas.width,canvas.height);
-  const data=image.data;
-  const histogram=new Uint32Array(256);
-
-  for(let i=0;i<data.length;i+=16){
-    const gray=Math.round(data[i]*0.299+data[i+1]*0.587+data[i+2]*0.114);
-    histogram[gray]++;
-  }
-
-  const sampleCount=Math.max(1,Math.ceil(data.length/16));
-  const lowTarget=sampleCount*0.02;
-  const highTarget=sampleCount*0.98;
-  let sum=0,low=0,high=255;
-  for(let i=0;i<256;i++){
-    sum+=histogram[i];
-    if(sum>=lowTarget){low=i;break}
-  }
-  sum=0;
-  for(let i=0;i<256;i++){
-    sum+=histogram[i];
-    if(sum>=highTarget){high=i;break}
-  }
-  const range=Math.max(32,high-low);
-
-  for(let i=0;i<data.length;i+=4){
-    const gray=data[i]*0.299+data[i+1]*0.587+data[i+2]*0.114;
-    const leveled=Math.max(0,Math.min(255,(gray-low)*255/range));
-    const contrasted=Math.max(0,Math.min(255,(leveled-128)*1.28+128));
-    data[i]=data[i+1]=data[i+2]=contrasted;
-  }
-  ctx.putImageData(image,0,0);
-  return canvas;
+  return model;
 }
 
 function limitedEditDistance(a,b,limit){
@@ -4174,40 +4189,6 @@ function limitedEditDistance(a,b,limit){
     previous=current;
   }
   return previous[b.length];
-}
-
-function ocrTextMatches(recognizedText,targetText){
-  const recognized=normalizeOcrText(recognizedText);
-  const target=normalizeOcrText(targetText);
-  if(!recognized||!target)return false;
-  if(recognized.includes(target))return true;
-  if(target.length<6)return false;
-
-  const limit=1;
-  for(let length=Math.max(1,target.length-limit);length<=target.length+limit;length++){
-    for(let start=0;start+length<=recognized.length;start++){
-      if(limitedEditDistance(recognized.slice(start,start+length),target,limit)<=limit)return true;
-    }
-  }
-  return false;
-}
-
-function buildOcrPredictions(text,labels){
-  return labels.map(className=>({
-    className,
-    probability:ocrTextMatches(text,className)?1:0
-  }));
-}
-
-function createOcrEvidenceDataURL(sourceCanvas){
-  if(!isOcrRecognition())return sourceCanvas.toDataURL("image/jpeg",0.42);
-  const maxSide=720;
-  const scale=Math.min(1,maxSide/Math.max(sourceCanvas.width,sourceCanvas.height));
-  const evidenceCanvas=document.createElement("canvas");
-  evidenceCanvas.width=Math.max(1,Math.round(sourceCanvas.width*scale));
-  evidenceCanvas.height=Math.max(1,Math.round(sourceCanvas.height*scale));
-  evidenceCanvas.getContext("2d").drawImage(sourceCanvas,0,0,evidenceCanvas.width,evidenceCanvas.height);
-  return evidenceCanvas.toDataURL("image/jpeg",0.38);
 }
 
 async function createAudioRecognizer(url){
@@ -4481,11 +4462,6 @@ async function startSelectedProject(){
       );
       throw e;
     }
-  }else if(projectType==="pose"){
-    $("captureBtn").classList.add("hidden");
-    $("poseStage").classList.remove("hidden");
-    $("targetHint").textContent="目前要完成的動作";
-    await startPose();
   }else{
     $("captureBtn").classList.add("hidden");
     $("audioStage").classList.remove("hidden");
@@ -4496,7 +4472,6 @@ async function startSelectedProject(){
 
 function hideAllStages(){
   $("imageStage").classList.add("hidden");
-  $("poseStage").classList.add("hidden");
   $("audioStage").classList.add("hidden");
 }
 
@@ -4524,6 +4499,15 @@ function describeCameraError(error){
   return `相機啟動失敗${name?`（${name}）`:""}${message?`：${message}`:""}。`;
 }
 
+async function requestStudentMediaStream(constraints){
+  let abandoned=false;
+  const requested=navigator.mediaDevices.getUserMedia(constraints).then(stream=>{
+    if(abandoned){stream.getTracks().forEach(track=>track.stop());throw new Error("相機請求已取消")}
+    return stream;
+  });
+  try{return await waitWithTimeout(requested,20000,constraints.audio?"等待麥克風權限逾時，請允許麥克風後重試。":"等待相機權限逾時，請允許相機後重試。")}
+  catch(error){abandoned=true;throw error}
+}
 async function openCompatibleCameraStream(){
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
     throw new Error("此瀏覽器不支援相機功能，請使用最新版 Chrome、Edge、Firefox 或 Safari。");
@@ -4534,17 +4518,18 @@ async function openCompatibleCameraStream(){
 
   let preferredError=null;
   try{
-    return await navigator.mediaDevices.getUserMedia({
+    return await requestStudentMediaStream({
       video:{facingMode:{ideal:"environment"}},
       audio:false
     });
   }catch(error){
+    if(["NotAllowedError","SecurityError"].includes(error?.name)||/逾時/.test(error?.message||""))throw error;
     preferredError=error;
     console.warn("後鏡頭優先設定啟動失敗，改用基本相機設定",error);
   }
 
   try{
-    return await navigator.mediaDevices.getUserMedia({
+    return await requestStudentMediaStream({
       video:true,
       audio:false
     });
@@ -4579,7 +4564,7 @@ async function startImage(){
     };
   });
 
-  await video.play();
+  await waitWithTimeout(video.play(),10000,"相機播放逾時，請重試。");
 
   lastImageOverlayText="";
   $("imageStage").classList.remove("hidden");
@@ -4594,11 +4579,11 @@ async function startImage(){
 
   $("captureBtn").classList.remove("hidden");
   $("captureBtn").textContent="📷";
-  const captureLabel=isOcrRecognition()?"拍照辨識文字":"拍照辨識";
+  const captureLabel="拍照辨識";
   $("captureBtn").setAttribute("aria-label",captureLabel);
   $("captureBtn").title=captureLabel;
   const guideText=$("imageStage").querySelector(".guide span");
-  if(guideText)guideText.textContent=isOcrRecognition()?"請將文字放入框內":"請將物品放入框內";
+  if(guideText)guideText.textContent="請將物品放入框內";
 
   if(isTeachingMode()){
     $("imageOverlay").textContent="請將物品放入框內，再按「拍照辨識」";
@@ -4643,23 +4628,7 @@ async function captureAndRecognize(){
       throw new Error("相機畫面尚未準備完成");
     }
 
-    if(isOcrRecognition()){
-      const sourceSide=Math.min(video.videoWidth,video.videoHeight);
-      const outputSide=Math.max(1,Math.round(Math.min(1400,sourceSide)));
-      canvas.width=outputSide;
-      canvas.height=outputSide;
-      ctx.drawImage(
-        video,
-        (video.videoWidth-sourceSide)/2,
-        (video.videoHeight-sourceSide)/2,
-        sourceSide,
-        sourceSide,
-        0,
-        0,
-        outputSide,
-        outputSide
-      );
-    }else{
+    {
       canvas.width=224;
       canvas.height=224;
       const side=Math.min(video.videoWidth,video.videoHeight);
@@ -4729,9 +4698,7 @@ async function captureAndRecognize(){
           $("speakDescriptionBtnTop").disabled=true;
         }
 
-        $("imageOverlay").textContent=isOcrRecognition()&&lastOcrText.trim()
-          ? "讀到文字，但沒有符合設定項目，請重新拍照"
-          : "無法確定辨識，請重新拍照";
+        $("imageOverlay").textContent="無法確定辨識，請重新拍照";
         lastImageOverlayText=$("imageOverlay").textContent;
       }
 
@@ -4751,7 +4718,7 @@ async function captureAndRecognize(){
       taskSuccessAnimating=true;
       currentImagePassed=true;
       currentImageConfidence=top.probability;
-      currentImageEvidenceDataURL=createOcrEvidenceDataURL(canvas);
+      currentImageEvidenceDataURL=canvas.toDataURL("image/jpeg",0.42);
       const capturedIndex=currentIndex;
       updateVerificationUI();
       updateCurrentTargetThumbnail();
@@ -4789,7 +4756,6 @@ async function captureAndRecognize(){
       }
 
       if(resultRef&&target){
-        const recognizedInput=isOcrRecognition()?String(lastOcrText||"").trim():"";
         try{
           await resultRef.update({
             attempts,
@@ -4798,7 +4764,6 @@ async function captureAndRecognize(){
             imageItemErrorCounts:{...imageItemErrorCounts},
             audioItemErrorCounts:{...audioItemErrorCounts},
             incorrectClasses:firebase.firestore.FieldValue.arrayUnion(target),
-            ...(recognizedInput?{writingInputRecords:firebase.firestore.FieldValue.arrayUnion({target,input:recognizedInput,correct:false})}:{}),
             updatedAt:firebase.firestore.FieldValue.serverTimestamp()
           });
         }catch(e){
@@ -4806,15 +4771,13 @@ async function captureAndRecognize(){
         }
       }
 
-      $("imageOverlay").textContent=isOcrRecognition()?"文字不符合，請重新拍照":"辨識錯誤，請重新拍照";
+      $("imageOverlay").textContent="辨識錯誤，請重新拍照";
       lastImageOverlayText=$("imageOverlay").textContent;
       setStatus(
         "recognitionStatus",
         isAdvancedMode()
           ?"辨識錯誤，請再聽一次語音說明後重新拍照。"
-          :isOcrRecognition()
-            ?"沒有讀到指定文字，請靠近、對準後重新拍照。"
-            :"辨識錯誤，請將指定物品放入框內後重新拍照。",
+          :"辨識錯誤，請將指定物品放入框內後重新拍照。",
         "error"
       );
 
@@ -4848,131 +4811,6 @@ function stopImage(cancel=true){
   if(video){
     try{video.pause();}catch(e){}
     video.srcObject=null;
-  }
-}
-
-async function startPose(){
-  // Pose 改用 getUserMedia 控制前後鏡頭，
-  // 再將影像提供給 Teachable Machine Pose 模型。
-  if(poseVideoStream){
-    poseVideoStream.getTracks().forEach(t=>t.stop());
-    poseVideoStream=null;
-  }
-
-  if(poseRaf){
-    clearTimeout(poseRaf);
-    poseRaf=null;
-  }
-
-  if(!poseVideo){
-    poseVideo=document.createElement("video");
-    poseVideo.autoplay=true;
-    poseVideo.muted=true;
-    poseVideo.playsInline=true;
-  }
-
-  poseVideoStream=await openCompatibleCameraStream();
-
-  poseVideo.srcObject=poseVideoStream;
-  await poseVideo.play();
-
-  const canvas=$("poseCanvas");
-  canvas.width=420;
-  canvas.height=420;
-  poseCtx=canvas.getContext("2d");
-
-  lastPoseOverlayText="";
-  poseStableClass="";
-  poseStableCount=0;
-  setStatus("recognitionStatus","姿勢相機已啟動，請讓全身進入框內。","success");
-  poseLoop();
-}
-
-function schedulePoseLoop(delay){
-  if(finished||paused||!poseVideo||!poseVideoStream)return;
-  if(poseRaf)clearTimeout(poseRaf);
-  poseRaf=setTimeout(()=>poseLoop(),delay);
-}
-
-async function poseLoop(){
-  if(finished||paused||!poseVideo||!poseVideoStream||posePredicting)return;
-
-  posePredicting=true;
-  let nextDelay=POSE_INTERVAL;
-
-  try{
-    const canvas=$("poseCanvas");
-    poseCtx.clearRect(0,0,canvas.width,canvas.height);
-
-    poseCtx.drawImage(poseVideo,0,0,canvas.width,canvas.height);
-
-    const {pose,posenetOutput}=await model.estimatePose(canvas);
-    const predictions=await model.predict(posenetOutput);
-
-    drawPose(pose);
-    processPredictions(predictions,canvas);
-
-    const top=predictions.reduce((best,item)=>!best||item.probability>best.probability?item:best,null);
-
-    if(top){
-      const overlayText=
-        `目前姿勢：${top.className}｜${Math.round(top.probability*100)}%`;
-
-      if(overlayText!==lastPoseOverlayText){
-        $("poseOverlay").textContent=overlayText;
-        lastPoseOverlayText=overlayText;
-      }
-
-      if(top.className===poseStableClass&&top.probability>=0.90){
-        poseStableCount++;
-      }else{
-        poseStableClass=top.className;
-        poseStableCount=1;
-      }
-
-      // 姿勢穩定時稍微降低推論頻率，動作改變後立即恢復。
-      if(poseStableCount>=5&&top.probability>=0.90){
-        nextDelay=POSE_STABLE_INTERVAL;
-      }
-    }
-  }catch(e){
-    setStatus("recognitionStatus","姿勢辨識錯誤：\n"+e.message,"error");
-    nextDelay=500;
-  }finally{
-    posePredicting=false;
-    schedulePoseLoop(nextDelay);
-  }
-}
-
-function drawPose(pose){
-  if(!poseCtx || !poseVideo)return;
-
-  const canvas=$("poseCanvas");
-
-  poseCtx.clearRect(0,0,canvas.width,canvas.height);
-
-  // 顯示相機畫面
-  poseCtx.drawImage(
-    poseVideo,
-    0,
-    0,
-    canvas.width,
-    canvas.height
-  );
-
-  // 顯示 Teachable Machine Pose 骨架
-  if(pose){
-    tmPose.drawKeypoints(
-      pose.keypoints,
-      0.5,
-      poseCtx
-    );
-
-    tmPose.drawSkeleton(
-      pose.keypoints,
-      0.5,
-      poseCtx
-    );
   }
 }
 
@@ -6678,8 +6516,8 @@ function renderTask(){
   $("currentTarget").textContent=(isAdvancedMode()||isDescriptionPromptMode())
     ? (currentIndex<total?"請聽語音題目":"全部完成")
     : (currentIndex<total?task.targetClasses[currentIndex]:"全部完成");
-  const hideOcrTargetName=isOcrRecognition()&&(isEvaluationMode()||isGameMode())&&!task.showNameText&&currentIndex<total;
-  $("currentTarget").classList.toggle("hidden",hideOcrTargetName);
+  const hideTextTargetName=isTextTask()&&(isEvaluationMode()||isGameMode())&&!task.showNameText&&currentIndex<total;
+  $("currentTarget").classList.toggle("hidden",hideTextTargetName);
   updateCurrentTargetThumbnail();
   updateAdvancedTargetThumbnail();
 
@@ -6751,7 +6589,7 @@ function finishTask(){
   $("gameWaitingCard").classList.add("hidden");
   $("completeCard").classList.remove("hidden");
   $("completeActions").classList.toggle("hidden",isTeachingMode()||isGameMode());
-  const typeName=isOcrRecognition()?"文字":{image:"圖片",audio:"音訊",pose:"姿勢"}[projectType];
+  const typeName=isTextTask()?"文字":{image:"圖片",audio:"音訊"}[projectType];
   if(isGameMode()){
     $("completeIcon").textContent=gameRank===1?"🏆":gameRank===2?"🥈":gameRank===3?"🥉":"🎉";
     $("completeTitle").textContent=gameRank===1?"恭喜獲得第一名！":"尋物遊戲完成！";
@@ -6835,7 +6673,7 @@ async function endTask(){
     captureFeedbackTimer=null;
   }
 
-  await Promise.all([deviceShutdown,leaveStatusWrite]);
+  await waitWithTimeout(Promise.all([deviceShutdown,leaveStatusWrite]),3000,"離開狀態尚未同步").catch(()=>{});
   if(studentLeaveConfirmed)requestStudentTabClose();
   releaseStudentMediaForIPhone();
   await new Promise(resolve=>setTimeout(resolve,60));
@@ -6845,11 +6683,10 @@ async function endTask(){
   resultRef=null;
   metadata=null;
   activeAudioRecognizer=null;
+  disposeHanziStrokeAssessment();
+  selectedModelLoadSession++;
+  disposeStudentModel(model);
   model=null;
-  if(ocrWorker){
-    try{ocrWorker.terminate()}catch(e){}
-    ocrWorker=null;
-  }
   task=null;
 
   try{window.stop()}catch(e){}
@@ -6870,20 +6707,6 @@ function stopAll(preserveClickRound=false){
   clearClickTimers(preserveClickRound);
   if($("captureBtn"))$("captureBtn").disabled=false;
   stopImage();
-  if(poseRaf)clearTimeout(poseRaf);
-  poseRaf=null;
-  if(poseWebcam){try{poseWebcam.stop();}catch(e){} poseWebcam=null}
-  if(poseVideoStream){
-    poseVideoStream.getTracks().forEach(t=>t.stop());
-    poseVideoStream=null;
-  }
-  if(poseVideo){
-    try{poseVideo.pause();}catch(e){}
-    poseVideo.srcObject=null;
-  }
-  posePredicting=false;
-  poseStableClass="";
-  poseStableCount=0;
   pauseStudentMicrophone();
 }
 
@@ -6921,9 +6744,10 @@ async function resumeStudentPageFromBackground(){
       scheduleQuestionReminder(false);
     }
   }catch(e){
+    paused=true;
     setStatus(
       "recognitionStatus",
-      "回到頁面後無法重新啟動相機或麥克風：\n"+e.message,
+      "回到頁面後無法重新啟動相機或麥克風，請按暫停／繼續重試：\n"+e.message,
       "error"
     );
   }
@@ -6978,7 +6802,14 @@ function handleHanziSpeechButton(){
   return recognizeHanziSpeech();
 }
 
+let studentStartInFlight=false;
 async function handleStartButtonClick(options={}){
+  if(studentStartInFlight)return;
+  studentStartInFlight=true;
+  try{return await performStartButtonClick(options)}
+  finally{studentStartInFlight=false}
+}
+async function performStartButtonClick(options={}){
   const fromVoiceControl=options&&options.fromVoiceControl===true;
   if(fromVoiceControl)await releaseStudentVoiceControlMicrophone();
   else await stopStudentVoiceControl();

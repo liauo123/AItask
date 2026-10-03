@@ -147,7 +147,7 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none}
   <div class="workspace">
     <section class="card modelCard">
       <h2 id="modelHeading">載入教學模型</h2>
-      <input id="recognitionEngine" type="hidden" value="ocr">
+      <input id="recognitionEngine" type="hidden" value="text">
       <input id="modelURL" type="hidden" value="">
       <div id="ocrFields">
         <textarea id="ocrKeywords" rows="6" placeholder="輸入教學的文字，按下Enter，一行一項。"></textarea>
@@ -420,7 +420,7 @@ function restoreTeacherDraftBase(){
   const draft=readTeacherDraft();
   if(!draft)return false;
   restoringTeacherDraft=true;
-  $("recognitionEngine").value="ocr";
+  $("recognitionEngine").value="text";
   $("modelURL").value="";
   $("ocrKeywords").value=String(draft.recognitionEngine==="hanzi"
     ? draft.hanziKeywords||draft.hanziPracticeText||draft.ocrKeywords||""
@@ -511,7 +511,7 @@ auth.onAuthStateChanged(async u=>{user=u;if(u){await firestorePersistenceReady;i
 $("loginBtn").onclick=async()=>{try{await auth.signInWithEmailAndPassword($("email").value.trim(),$("password").value)}catch(e){status("authStatus","登入失敗：\n"+e.message,"err")}};
 $("logoutBtn").onclick=()=>{saveTeacherDraft();auth.signOut()};
 function getSelectedRecognitionEngine(){
-  return "ocr";
+  return "text";
 }
 function getOcrKeywords(){
   const seen=new Set();
@@ -548,10 +548,10 @@ $("loadModelBtn").onclick=async()=>{
   $("hanziModeCard").classList.add("hidden");
   $("speakingModeCard").classList.add("hidden");
   $("readingModeCard").classList.add("hidden");
-  const engine="ocr";
+  const engine="text";
   modelURL="";
   loadButton.disabled=true;
-  status("modelStatus",engine==="ocr"?"正在建立文字項目…":"正在載入模型…");
+  status("modelStatus",engine==="text"?"正在建立文字項目…":"正在載入模型…");
   try{
     labels=getOcrKeywords();
     if(!labels.length)throw new Error("請至少輸入一項要辨識的文字。");
@@ -566,8 +566,8 @@ $("loadModelBtn").onclick=async()=>{
     $("createHanziBtn").disabled=false;
     $("createSpeakingBtn").disabled=false;
     $("createReadingBtn").disabled=false;
-    $("teachMode").classList.remove("hidden");
-    $("advancedModeCard").classList.remove("hidden");
+    $("teachMode").classList.add("hidden");
+    $("advancedModeCard").classList.add("hidden");
     $("gameModeCard").classList.remove("hidden");
     $("clickModeCard").classList.remove("hidden");
     $("hanziModeCard").classList.remove("hidden");
@@ -576,7 +576,7 @@ $("loadModelBtn").onclick=async()=>{
     refreshTeacherControlsAfterRecognitionLoad();
     await waitForTeacherInterfacePaint();
     refreshTeacherControlsAfterRecognitionLoad();
-    status("modelStatus","文字辨識已載入，共 "+labels.length+" 項文字。可拖拉調整順序並選擇性加入縮圖。","ok");
+    status("modelStatus","文字項目已載入，共 "+labels.length+" 項文字。可拖拉調整順序並選擇性加入縮圖。","ok");
     saveTeacherDraft();
   }catch(e){
     status("modelStatus","模型載入失敗：\n"+e.message,"err");
@@ -615,7 +615,7 @@ async function restoreTaskFromTaskList(taskId){
     $("hanziModeCard").classList.add("hidden");
     $("speakingModeCard").classList.add("hidden");
     $("readingModeCard").classList.add("hidden");
-    $("recognitionEngine").value="ocr";
+    $("recognitionEngine").value="text";
     $("modelURL").value="";
     $("ocrKeywords").value=["hanzi","speaking"].includes(taskMode)
       ? (Array.isArray(task.hanziTexts)&&task.hanziTexts.length
@@ -745,8 +745,8 @@ async function restoreTaskFromTaskList(taskId){
       ? "口語模式(說)設定已回復。"
       : taskMode==="reading"
       ? "問答模式(讀)設定已回復。"
-      : task.recognitionEngine==="ocr"
-      ? "文字辨識任務設定已回復。已載入文字項目、縮圖、說明及語音辨識勾選狀態。"
+      : ["text","ocr"].includes(task.recognitionEngine)
+      ? "文字題目設定已回復。已載入文字項目、縮圖、說明及語音辨識勾選狀態。"
       : "任務設定已回復。已載入物品縮圖、說明及語音辨識勾選狀態。","ok");
     const cleanURL=new URL(location.href);
     cleanURL.searchParams.delete("restoreTask");
@@ -1007,9 +1007,7 @@ function getRecognitionTaskFields(_targets,relaxedSpeechRecognition=false,fuzzyS
   relaxedSpeechRecognition=!!relaxedSpeechRecognition;
   fuzzySpeechRecognition=!!fuzzySpeechRecognition;
   return {
-    recognitionEngine:"ocr",
-    ocrLanguages:["chi_tra","eng"],
-    ocrMatchMode:"contains",
+    recognitionEngine:"text",
     relaxedSpeechRecognition,
     fuzzySpeechRecognition,
     threshold:0.50
@@ -1017,127 +1015,14 @@ function getRecognitionTaskFields(_targets,relaxedSpeechRecognition=false,fuzzyS
 }
 
 async function createTeachingModeQR(){
-  updateLabelsFromDOM();
-  const teachingTitle=$("teachingTitle").value.trim();
-  if(!teachingTitle){
-    status("teachQRStatus","請輸入教學名稱。","err");
-    return;
-  }
-  if(!user){
-    status("teachQRStatus","請先登入教師帳號。","err");
-    return;
-  }
-
-  if(!model||!labels.length){
-    status("teachQRStatus","請先成功載入模型。","err");
-    return;
-  }
-
-  const baseInput="";
-  const baseURL=baseInput||new URL("student.html",location.href).toString();
-
-  $("createTeachQRBtn").disabled=true;
-  status("teachQRStatus","正在建立學生教學模式…");
-
-  try{
-    const ref=await db.collection("tasks").add({
-      teacherId:user.uid,
-      teacherEmail:user.email||"",
-      title:teachingTitle,
-      modelURL:modelURL,
-      ...getRecognitionTaskFields(labels,false),
-      targetClasses:[...labels],
-      classDescriptions:getClassDescriptions(false),
-      classThumbnails:getClassThumbnails(false),
-      requiredConsecutiveFrames:10,
-      orderMode:"teaching",
-      taskMode:"teaching",
-      status:"active",
-      version:"2.1-teaching",
-      createdAt:firebase.firestore.FieldValue.serverTimestamp()
-    });
-
-    const u=new URL(baseURL,location.href);
-    u.searchParams.set("task",ref.id);
-    u.searchParams.set("mode","teaching");
-
-    $("teachQRStatus").textContent=
-      "學生教學模式建立成功！\nTask ID："+ref.id+"\n學生開啟後，鏡頭對準物品會顯示名稱。";
-
-    showQR(ref.id,teachingTitle);
-  }catch(e){
-    console.error("建立教學模式失敗",e);
-    status("teachQRStatus","建立教學模式失敗：\n"+(e.message||e),"err");
-  }finally{
-    $("createTeachQRBtn").disabled=false;
-  }
+  status("teachQRStatus","拍照文字辨識功能已移除，請使用其他模式。","err");
 }
 
 $("createTeachQRBtn").onclick=createTeachingModeQR;
 
 
 async function createAdvancedEvaluationQR(){
-  updateLabelsFromDOM();
-
-  const title=$("advancedTitle").value.trim();
-  const targets=getSelectedClassesInCurrentOrder();
-
-  if(!title){
-    status("advancedStatus","請輸入進階評量名稱。","err");
-    return;
-  }
-  if(!targets.length){
-    status("advancedStatus","請至少勾選一項物品。","err");
-    return;
-  }
-
-  const descriptions=getClassDescriptions(true);
-  const audioRequiredClasses=getAudioTargets("advanced",targets);
-  const missingDescriptions=targets.filter(name=>!String(descriptions[name]||"").trim());
-  if(missingDescriptions.length){
-    status(
-      "advancedStatus",
-      "進階評量必須設定每個物品的說明文字：\n"+missingDescriptions.join("、"),
-      "err"
-    );
-    return;
-  }
-
-  $("createAdvancedBtn").disabled=true;
-  status("advancedStatus","正在建立進階評量…");
-
-  try{
-    const ref=await db.collection("tasks").add({
-      teacherId:user.uid,
-      teacherEmail:user.email||"",
-      title,
-      modelURL,
-      ...getRecognitionTaskFields(targets,false),
-      targetClasses:targets,
-      classDescriptions:getClassDescriptions(false),
-      classThumbnails:getClassThumbnails(false),
-      audioRequiredClasses,
-      speechRecognitionMode:"browser",
-      speechRecognitionLanguage:"zh-TW",
-      requiredConsecutiveFrames:1,
-      orderMode:"fixed",
-      taskMode:"advanced",
-      status:"active",
-      version:"2.5-advanced-browser-speech",
-      createdAt:firebase.firestore.FieldValue.serverTimestamp()
-    });
-
-    status(
-      "advancedStatus",
-      "進階評量建立成功！\nTask ID："+ref.id,
-      "ok"
-    );
-    showQR(ref.id,title);
-  }catch(e){
-    status("advancedStatus","建立進階評量失敗：\n"+e.message,"err");
-  }finally{
-    $("createAdvancedBtn").disabled=false;
-  }
+  status("advancedStatus","拍照文字辨識功能已移除，請使用其他模式。","err");
 }
 
 $("createAdvancedBtn").onclick=createAdvancedEvaluationQR;
@@ -1283,7 +1168,7 @@ function getHanziCharacters(texts){
 async function createHanziModeQR(){
   updateLabelsFromDOM();
   const title=$("hanziTaskTitle").value.trim();
-  const typedTexts=getSelectedRecognitionEngine()==="ocr"?getOcrKeywords():[];
+  const typedTexts=getSelectedRecognitionEngine()==="text"?getOcrKeywords():[];
   const selectedTexts=getSelectedClassesInCurrentOrder();
   const hanziTexts=labels.length?selectedTexts:typedTexts;
   const chars=getHanziCharacters(hanziTexts);
@@ -1291,7 +1176,7 @@ async function createHanziModeQR(){
   const speechEnabled=false;
   const hanziRepeatCount=1;
   if(!title)return status("hanziStatus","請輸入書寫模式(寫)名稱。","err");
-  if(!labels.length&&!hanziTexts.length)return status("hanziStatus","請先在上方輸入文字並按下「載入文字辨識」。","err");
+  if(!labels.length&&!hanziTexts.length)return status("hanziStatus","請先在上方輸入文字並按下「確定」。","err");
   if(labels.length&&!hanziTexts.length)return status("hanziStatus","請至少勾選一個要出題的文字項目。","err");
   if(!speechEnabled&&!chars.length)return status("hanziStatus","書寫內容需包含至少一個中文字或英文字母。","err");
   if(!user)return status("hanziStatus","請先登入教師帳號。","err");
@@ -1307,9 +1192,7 @@ async function createHanziModeQR(){
       teacherEmail:user.email||"",
       title,
       modelURL,
-      recognitionEngine:"ocr",
-      ocrLanguages:["chi_tra","eng"],
-      ocrMatchMode:"contains",
+      recognitionEngine:"text",
       targetClasses:targets,
       classThumbnails:getClassThumbnails(true),
       hanziText:hanziTexts.join("\n"),
@@ -1360,7 +1243,7 @@ async function createSpeakingModeQR(){
   try{
     const ref=await db.collection("tasks").add({
       teacherId:user.uid,teacherEmail:user.email||"",title,modelURL,
-      recognitionEngine:"ocr",ocrLanguages:["chi_tra","eng"],ocrMatchMode:"contains",
+      recognitionEngine:"text",
       targetClasses:questionSequence,classThumbnails:getClassThumbnails(true),
       hanziText:hanziTexts.join("\n"),hanziTexts,hanziQuestionSequence:questionSequence,
       hanziWritingEnabled:false,hanziSpeechEnabled:true,hanziRepeatCount:repeatCount,
