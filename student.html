@@ -998,6 +998,7 @@ let clickSequence=[],clickTrialIndex=0,clickRecords=[],clickWrongCount=0,clickIt
 let hanziSpeechRecognition=null,hanziSpeechStarting=false,hanziSpeechStartWatchdog=null,hanziSpeechInputTimer=null,hanziSpeechSessionDeadline=0,hanziSpeechResumeTimer=null;
 let hanziPracticeItems=[],hanziPracticeTrigger=null;
 let studentVoiceControlRecognition=null,studentVoiceControlTimer=null,studentVoiceControlRestartTimer=null,studentVoiceControlDeadline=0,studentVoiceControlStage="",studentVoiceControlSession=0;
+let safariStudentVoiceControlActivated=false;
 const STUDENT_VOICE_CONTROL_WINDOW_MS=20000;
 
 const $=id=>document.getElementById(id);
@@ -2443,12 +2444,16 @@ async function loadTask(){
         button.classList.remove("selected");
       });
       $("selectedNumberText").textContent="尚未選擇編號";
-      $("startBtn").disabled=true;
-      $("startBtn").textContent=isGameMode()?"送出加入申請":isClickMode()?"開始點選模式":isSpeakingMode()?"開始口語模式":isHanziMode()?"開始書寫模式":isReadingMode()?"開始問答":"開始任務";
+      const startButtonText=isGameMode()?"送出加入申請":isClickMode()?"開始點選模式":isSpeakingMode()?"開始口語模式":isHanziMode()?"開始書寫模式":isReadingMode()?"開始問答":"開始任務";
+      $("startBtn").dataset.taskStartText=startButtonText;
+      safariStudentVoiceControlActivated=false;
+      const requiresSafariVoiceActivation=!!(task.studentFullVoiceControl&&isSafariBrowser());
+      $("startBtn").disabled=!requiresSafariVoiceActivation;
+      $("startBtn").textContent=requiresSafariVoiceActivation?"開啟語音控制":startButtonText;
 
       $("joinCard").classList.remove("hidden");
       setSelectionAttention("number");
-      if(task.studentFullVoiceControl)setTimeout(()=>startStudentVoiceControlStage("join"),250);
+      if(task.studentFullVoiceControl&&!requiresSafariVoiceActivation)setTimeout(()=>startStudentVoiceControlStage("join"),250);
       if(isGameMode()){
         listenGameSeats();
         setStatus("loadStatus","遊戲載入成功，請選擇學生編號後送出加入申請。","success");
@@ -2483,6 +2488,19 @@ function selectStudentNumber(number){
   $("startBtn").disabled=false;
   setSelectionAttention("start");
   $("joinStatus").classList.add("hidden");
+}
+
+function activateSafariStudentVoiceControlFromGesture(){
+  if(!task?.studentFullVoiceControl||!isSafariBrowser()||safariStudentVoiceControlActivated)return false;
+  safariStudentVoiceControlActivated=true;
+  if(!primeSafariFirstQuestionSpeech())unlockPlatformSpeech();
+  primeStudentAudioPlayback();
+  const startButton=$("startBtn");
+  startButton.textContent=startButton.dataset.taskStartText||"開始任務";
+  startButton.disabled=!selectedStudentNumber;
+  setSelectionAttention(selectedStudentNumber?"start":"number");
+  startStudentVoiceControlStage("join");
+  return true;
 }
 
 numberButtons.forEach(button=>{
@@ -6709,6 +6727,7 @@ function handleHanziSpeechButton(){
 
 async function handleStartButtonClick(options={}){
   const fromVoiceControl=options&&options.fromVoiceControl===true;
+  if(!fromVoiceControl&&activateSafariStudentVoiceControlFromGesture())return;
   if(fromVoiceControl)await releaseStudentVoiceControlMicrophone();
   else await stopStudentVoiceControl();
   setSelectionAttention(null);
