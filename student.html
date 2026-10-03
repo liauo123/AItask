@@ -3966,6 +3966,7 @@ function stopStudentVoiceControl(){
   if(!recognition)return Promise.resolve();
   return new Promise(resolve=>{
     let settled=false;
+    const waitForSafariRecognitionEnd=isSafariBrowser();
     const finish=()=>{
       if(settled)return;
       settled=true;
@@ -3973,11 +3974,15 @@ function stopStudentVoiceControl(){
       trackedSpeechRecognitions.delete(recognition);
       resolve();
     };
-    const fallbackTimer=setTimeout(finish,1400);
+    const fallbackTimer=setTimeout(finish,waitForSafariRecognitionEnd?5000:1400);
     if(recognition.addEventListener){
-      recognition.addEventListener("audioend",finish,{once:true});
+      recognition.addEventListener("audioend",()=>{
+        if(!waitForSafariRecognitionEnd)finish();
+      },{once:true});
       recognition.addEventListener("end",finish,{once:true});
-      recognition.addEventListener("error",finish,{once:true});
+      recognition.addEventListener("error",()=>{
+        if(!waitForSafariRecognitionEnd)finish();
+      },{once:true});
     }
     try{recognition.onstart=null}catch(e){}
     try{recognition.onresult=null}catch(e){}
