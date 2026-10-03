@@ -1018,6 +1018,7 @@ let preferredPlatformVoice=null;
 let platformSpeechLastText="",platformSpeechLastAt=0,platformSpeechLastPromise=null;
 let safariPrimedSpeechText="",safariPrimedSpeechPromise=null;
 let safariFirstQuestionFullVolumePending=false;
+let studentVoiceControlQuestionNotBefore=0;
 let questionAutoSpeechTimer=null,questionAutoSpeechKey="",questionAutoSpeechInFlightKey="";
 let questionReminderTimer=null,questionReminderCount=0,questionReminderKey="",questionReminderManuallyStopped=false,questionReminderBusy=false;
 let automaticSpeechRestartTimer=null,automaticSpeechIdleTimer=null,automaticSpeechQuestionKey="",automaticSpeechFallbackToButton=false;
@@ -1126,6 +1127,8 @@ function speakPlatformText(text,{lang="zh-TW",rate=.9,pitch=1,volume=1,immediate
   const requestId=++platformSpeechRequestId;
   const synthesis=window.speechSynthesis;
   const useSafariFirstQuestionFullVolume=safariFirstQuestionFullVolumePending&&isSafariBrowser()&&currentIndex===0;
+  const voiceControlHandoffDelay=Math.max(0,studentVoiceControlQuestionNotBefore-Date.now());
+  if(studentVoiceControlQuestionNotBefore)studentVoiceControlQuestionNotBefore=0;
   try{synthesis.cancel()}catch(e){}
   try{synthesis.resume()}catch(e){}
   refreshPlatformSpeechVoice();
@@ -1169,8 +1172,10 @@ function speakPlatformText(text,{lang="zh-TW",rate=.9,pitch=1,volume=1,immediate
         finish(false);
       }
     };
-    if(immediate&&!useSafariFirstQuestionFullVolume)speakNow();
-    else setTimeout(speakNow,useSafariFirstQuestionFullVolume?280:45);
+    const normalDelay=immediate&&!useSafariFirstQuestionFullVolume?0:(useSafariFirstQuestionFullVolume?280:45);
+    const playbackDelay=Math.max(normalDelay,voiceControlHandoffDelay);
+    if(playbackDelay<=0)speakNow();
+    else setTimeout(speakNow,playbackDelay);
   });
   platformSpeechLastText=value;
   platformSpeechLastAt=now;
@@ -3997,8 +4002,6 @@ function stopStudentVoiceControl(){
 async function releaseStudentVoiceControlMicrophone(){
   await stopStudentVoiceControl();
   stopTrackedMicrophoneTracks();
-  await new Promise(resolve=>setTimeout(resolve,isSafariBrowser()?1100:420));
-  stopTrackedMicrophoneTracks();
   if(isSafariBrowser()){
     platformSpeechRequestId++;
     platformSpeechLastText="";
@@ -4009,14 +4012,16 @@ async function releaseStudentVoiceControlMicrophone(){
     safariFirstQuestionFullVolumePending=false;
     if("speechSynthesis" in window){
       try{window.speechSynthesis.cancel()}catch(e){}
-      await new Promise(resolve=>setTimeout(resolve,120));
       try{window.speechSynthesis.resume()}catch(e){}
       refreshPlatformSpeechVoice();
     }
     if(buttonSoundContext&&buttonSoundContext.state!=="closed"&&buttonSoundContext.state!=="running"){
       try{await buttonSoundContext.resume()}catch(e){}
     }
-    await new Promise(resolve=>setTimeout(resolve,180));
+    studentVoiceControlQuestionNotBefore=Date.now()+500;
+  }else{
+    await new Promise(resolve=>setTimeout(resolve,420));
+    stopTrackedMicrophoneTracks();
   }
 }
 
