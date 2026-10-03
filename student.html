@@ -620,8 +620,8 @@ body.safari-browser[data-mode-theme="reading"] .recognition-actions #voiceRecogn
     <div id="taskTitle" class="task-title hidden" aria-hidden="true"></div>
     <div id="taskMeta" class="meta hidden" aria-hidden="true"></div>
 
+    <button id="safariVoiceControlBtn" class="safari-voice-control-activate hidden" type="button">按下開啟麥克風，<strong>可以語音控制選號、開始、再一次、結束</strong></button>
     <div class="number-select-title">請選擇學生編號</div>
-    <button id="safariVoiceControlBtn" class="safari-voice-control-activate hidden" type="button">開啟麥克風後，全程語音控制</button>
     <div id="studentNumberGrid" class="number-grid">
       <button type="button" class="number-btn" data-student-number="1">1</button>
       <button type="button" class="number-btn" data-student-number="2">2</button>
@@ -2605,8 +2605,8 @@ async function loadTask(){
 
 
 function setSelectionAttention(target){
-  $("studentNumberGrid").classList.toggle("selection-attention",target==="number");
-  $("startBtn").classList.toggle("start-attention",target==="start");
+  $("studentNumberGrid").classList.remove("selection-attention");
+  $("startBtn").classList.remove("start-attention");
 }
 
 function selectStudentNumber(number){
