@@ -69,6 +69,19 @@ button{min-height:50px;border:0;border-radius:15px;padding:0 16px;cursor:pointer
   font-weight:900;
   text-align:center;
 }
+.safari-voice-control-activate{
+  width:100%;
+  margin:0 0 14px;
+  border:3px solid #2563eb;
+  background:linear-gradient(135deg,#eff6ff,#dbeafe);
+  color:#1d4ed8;
+  font-weight:1000;
+  animation:safariVoiceControlAttention .82s ease-in-out infinite;
+}
+@keyframes safariVoiceControlAttention{
+  0%,100%{box-shadow:0 0 0 0 rgba(37,99,235,0),0 5px 14px rgba(37,99,235,.16)}
+  50%{box-shadow:0 0 0 7px rgba(37,99,235,.38),0 9px 24px rgba(37,99,235,.32)}
+}
 .number-grid{
   display:grid;
   grid-template-columns:repeat(5,1fr);
@@ -93,6 +106,7 @@ button{min-height:50px;border:0;border-radius:15px;padding:0 16px;cursor:pointer
 @media(prefers-reduced-motion:reduce){
   .number-grid.selection-attention{animation:none;box-shadow:0 0 0 5px rgba(37,99,235,.3);background:rgba(219,234,254,.45)}
   #startBtn.start-attention{animation:none;box-shadow:0 0 0 5px rgba(37,99,235,.3)}
+  .safari-voice-control-activate{animation:none;box-shadow:0 0 0 6px rgba(37,99,235,.32)}
 }
 .number-btn{
   min-height:54px;
@@ -598,6 +612,7 @@ body.safari-browser[data-mode-theme="reading"] .recognition-actions #voiceRecogn
     <div id="taskMeta" class="meta hidden" aria-hidden="true"></div>
 
     <div class="number-select-title">請選擇學生編號</div>
+    <button id="safariVoiceControlBtn" class="safari-voice-control-activate hidden" type="button">開啟麥克風後，全程語音控制</button>
     <div id="studentNumberGrid" class="number-grid">
       <button type="button" class="number-btn" data-student-number="1">1</button>
       <button type="button" class="number-btn" data-student-number="2">2</button>
@@ -999,7 +1014,8 @@ let hanziSpeechRecognition=null,hanziSpeechStarting=false,hanziSpeechStartWatchd
 let hanziPracticeItems=[],hanziPracticeTrigger=null;
 let studentVoiceControlRecognition=null,studentVoiceControlTimer=null,studentVoiceControlRestartTimer=null,studentVoiceControlDeadline=0,studentVoiceControlStage="",studentVoiceControlSession=0;
 let safariStudentVoiceControlActivated=false;
-const STUDENT_VOICE_CONTROL_WINDOW_MS=20000;
+const STUDENT_VOICE_CONTROL_JOIN_WINDOW_MS=30000;
+const STUDENT_VOICE_CONTROL_FINISH_WINDOW_MS=20000;
 
 const $=id=>document.getElementById(id);
 const numberButtons=[...document.querySelectorAll(".number-btn")];
@@ -2448,8 +2464,10 @@ async function loadTask(){
       $("startBtn").dataset.taskStartText=startButtonText;
       safariStudentVoiceControlActivated=false;
       const requiresSafariVoiceActivation=!!(task.studentFullVoiceControl&&isSafariBrowser());
-      $("startBtn").disabled=!requiresSafariVoiceActivation;
-      $("startBtn").textContent=requiresSafariVoiceActivation?"開啟語音控制":startButtonText;
+      $("safariVoiceControlBtn").classList.toggle("hidden",!requiresSafariVoiceActivation);
+      $("safariVoiceControlBtn").disabled=false;
+      $("startBtn").disabled=true;
+      $("startBtn").textContent=startButtonText;
 
       $("joinCard").classList.remove("hidden");
       setSelectionAttention("number");
@@ -2495,9 +2513,10 @@ function activateSafariStudentVoiceControlFromGesture(){
   safariStudentVoiceControlActivated=true;
   if(!primeSafariFirstQuestionSpeech())unlockPlatformSpeech();
   primeStudentAudioPlayback();
-  const startButton=$("startBtn");
-  startButton.textContent=startButton.dataset.taskStartText||"開始任務";
-  startButton.disabled=!selectedStudentNumber;
+  const activationButton=$("safariVoiceControlBtn");
+  activationButton.disabled=true;
+  activationButton.classList.add("hidden");
+  $("startBtn").disabled=!selectedStudentNumber;
   setSelectionAttention(selectedStudentNumber?"start":"number");
   startStudentVoiceControlStage("join");
   return true;
@@ -4100,6 +4119,7 @@ function startStudentVoiceControlStage(stage){
   if(!SpeechRecognition)return;
   const session=++studentVoiceControlSession;
   studentVoiceControlStage=stage;
+  const voiceControlWindowMs=stage==="join"?STUDENT_VOICE_CONTROL_JOIN_WINDOW_MS:STUDENT_VOICE_CONTROL_FINISH_WINDOW_MS;
   const permissionWaitDeadline=Date.now()+30000;
   const launch=()=>{
     if(session!==studentVoiceControlSession||studentVoiceControlStage!==stage||document.hidden||exitInProgress)return;
@@ -4117,8 +4137,8 @@ function startStudentVoiceControlStage(stage){
       chromiumSpeechPermissionPrimed=true;
       primeStudentAudioPlayback();
       if(!studentVoiceControlDeadline){
-        studentVoiceControlDeadline=Date.now()+STUDENT_VOICE_CONTROL_WINDOW_MS;
-        studentVoiceControlTimer=setTimeout(stopStudentVoiceControl,STUDENT_VOICE_CONTROL_WINDOW_MS);
+        studentVoiceControlDeadline=Date.now()+voiceControlWindowMs;
+        studentVoiceControlTimer=setTimeout(stopStudentVoiceControl,voiceControlWindowMs);
       }
     };
     recognition.onresult=event=>{
@@ -6727,7 +6747,6 @@ function handleHanziSpeechButton(){
 
 async function handleStartButtonClick(options={}){
   const fromVoiceControl=options&&options.fromVoiceControl===true;
-  if(!fromVoiceControl&&activateSafariStudentVoiceControlFromGesture())return;
   if(fromVoiceControl)await releaseStudentVoiceControlMicrophone();
   else await stopStudentVoiceControl();
   setSelectionAttention(null);
@@ -6752,6 +6771,7 @@ $("speakDescriptionBtnTop").onclick=speakTeachingDescription;
 $("repeatAdvancedPromptBtn").onclick=()=>{markQuestionPromptInteraction();return speakAdvancedPrompt()};
 $("speakEvaluationTargetBtn").onclick=()=>{markQuestionPromptInteraction();return speakEvaluationTarget()};
 $("loadBtn").onclick=loadTask;
+$("safariVoiceControlBtn").onclick=activateSafariStudentVoiceControlFromGesture;
 $("startBtn").onclick=handleStartButtonClick;
 $("captureBtn").onclick=captureAndRecognize;
 $("voiceRecognizeBtn").onclick=handleOptionalSpeechButton;
