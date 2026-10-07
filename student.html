@@ -6174,6 +6174,7 @@ function beginStudentExitMicrophoneShutdown(){
 }
 
 function beginStudentExitDeviceShutdown(){
+  suspendStudentScreenWakeLock();
   mediaRequestsBlocked=true;
   stopTrackedSpeechRecognitions(true);
   releaseStudentMediaForIPhone();
@@ -6964,6 +6965,67 @@ window.addEventListener("freeze",stopAll);
 document.addEventListener("freeze",stopAll,true);
 document.addEventListener("pause",stopAll,true);
 window.addEventListener("beforeunload",handleStudentPageExit,true);
+
+// 學生任務期間保持螢幕亮著；系統拒絕時不影響原有任務流程。
+let studentScreenWakeLock=null;
+let studentScreenWakeLockRequest=null;
+let studentScreenWakeLockSuspended=false;
+const studentScreenWakeLockCards=["joinCard","gameWaitingCard","taskCard","clickTaskCard","hanziTaskCard","completeCard"];
+function studentScreenWakeLockWanted(){
+  return !!task&&!exitInProgress&&!studentLeaveConfirmed&&!studentScreenWakeLockSuspended&&
+    !document.hidden&&document.visibilityState!=="hidden"&&
+    studentScreenWakeLockCards.some(id=>{
+      const card=$(id);
+      return card&&!card.classList.contains("hidden");
+    });
+}
+function releaseStudentScreenWakeLock(){
+  const lock=studentScreenWakeLock;
+  studentScreenWakeLock=null;
+  if(lock){
+    try{Promise.resolve(lock.release()).catch(()=>{})}catch(e){}
+  }
+}
+function syncStudentScreenWakeLock(){
+  if(!studentScreenWakeLockWanted()){
+    releaseStudentScreenWakeLock();
+    return;
+  }
+  if(!navigator.wakeLock||typeof navigator.wakeLock.request!=="function"||studentScreenWakeLock||studentScreenWakeLockRequest)return;
+  // 保留單一申請；切到背景或離開後才完成的申請會立即解除。
+  studentScreenWakeLockRequest=Promise.resolve().then(()=>navigator.wakeLock.request("screen")).then(lock=>{
+    if(!studentScreenWakeLockWanted()){
+      try{Promise.resolve(lock.release()).catch(()=>{})}catch(e){}
+      return;
+    }
+    studentScreenWakeLock=lock;
+    lock.addEventListener("release",()=>{
+      if(studentScreenWakeLock===lock)studentScreenWakeLock=null;
+    });
+  }).catch(()=>{
+    // 不支援、低電量或權限拒絕均不可阻擋任務，也不持續重試耗電。
+  }).finally(()=>{studentScreenWakeLockRequest=null;});
+}
+function suspendStudentScreenWakeLock(){
+  studentScreenWakeLockSuspended=true;
+  releaseStudentScreenWakeLock();
+}
+const studentScreenWakeLockObserver=new MutationObserver(syncStudentScreenWakeLock);
+studentScreenWakeLockCards.forEach(id=>{
+  const card=$(id);
+  if(card)studentScreenWakeLockObserver.observe(card,{attributes:true,attributeFilter:["class"]});
+});
+document.addEventListener("visibilitychange",syncStudentScreenWakeLock,true);
+window.addEventListener("pagehide",suspendStudentScreenWakeLock,true);
+window.addEventListener("pageshow",()=>{
+  studentScreenWakeLockSuspended=false;
+  syncStudentScreenWakeLock();
+},true);
+window.addEventListener("beforeunload",suspendStudentScreenWakeLock,true);
+// 使用者操作時可重新申請先前被系統拒絕或解除的喚醒鎖。
+document.addEventListener("pointerdown",syncStudentScreenWakeLock,true);
+window.addEventListener("focus",syncStudentScreenWakeLock,true);
+syncStudentScreenWakeLock();
 
 taskId=new URLSearchParams(location.search).get("task")||"";
 $("taskIdInput").value=taskId;
